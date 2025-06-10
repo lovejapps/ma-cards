@@ -1,6 +1,34 @@
-// App.tsx
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, Button, ScrollView, ActivityIndicator, Alert, TextStyle, Modal, TouchableOpacity } from 'react-native'; // Import Alert, TextStyle, Modal, and TouchableOpacity
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Button,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TextStyle,
+  TouchableOpacity,
+  View
+} from 'react-native';
+
+// Platform-specific alert function
+const showAlert = (title: string, message: string, buttons: {text: string, onPress?: () => void}[] = []) => {
+  if (Platform.OS === 'web') {
+    // Use browser's native alert for web
+    window.alert(`${title}\n\n${message}`);
+    // If there's an OK button with an onPress handler, call it
+    const okButton = buttons.find(btn => btn.text === 'OK' || btn.text === 'Ok' || btn.text === 'ok');
+    if (okButton && okButton.onPress) {
+      okButton.onPress();
+    }
+  } else {
+    // Use React Native's Alert for mobile
+    Alert.alert(title, message, buttons);
+  }
+};
 
 // ** IMPORTANT **
 // Replace this with the actual URL of your Express backend.
@@ -92,8 +120,9 @@ export default function HomeScreen() {
 
   // Function to start a new game
   const startGame = async () => {
+    console.log("Starting game...", Platform.OS);
     if (!playerName) {
-      Alert.alert("Please enter your name to start.");
+      showAlert("Name Required", "Please enter your name to start.");
       return;
     }
 
@@ -156,143 +185,256 @@ export default function HomeScreen() {
 
 
   // Function to handle playing a card
-  const handlePlayCard = async (cardToPlay: Card) => {
-      if (!game) return;
+  const handlePlayCard = (cardToPlay: Card) => {
+      if (!game || game.gameOver) return;
       setLoading(true);
-
+      setError(null);
+      
       // If playing an 8, show the suit selection modal
       if (cardToPlay.rank === '8') {
-          setSelectedCard(cardToPlay);
-          setShowSuitModal(true);
-          setLoading(false);
+          if (Platform.OS === 'web') {
+              // For web, use a simple prompt
+              const suit = window.prompt("Select the suit for your 8 (Hearts, Diamonds, Clubs, or Spades):");
+              if (suit && ['Hearts', 'Diamonds', 'Clubs', 'Spades'].includes(suit)) {
+                  sendPlayCard(cardToPlay, suit as Suit);
+              } else {
+                  setLoading(false);
+                  showAlert('Invalid Suit', 'Please select a valid suit (Hearts, Diamonds, Clubs, or Spades).');
+              }
+          } else {
+              // For mobile, show the suit selection modal
+              setSelectedCard(cardToPlay);
+              setShowSuitModal(true);
+              setLoading(false);
+          }
       } else {
           // For non-8 cards, directly send the play request
-          sendPlayCard(cardToPlay, null);
+          sendPlayCard(cardToPlay);
       }
   };
-
-  // Function to handle suit selection
-  const handleSuitSelection = (suit: Suit) => {
+  
+  // Function to handle suit selection from the modal
+  const handleSuitSelect = (suit: Suit) => {
       if (selectedCard) {
           sendPlayCard(selectedCard, suit);
-          setShowSuitModal(false);
-          setSelectedCard(null);
+      }
+      setShowSuitModal(false);
+  };
+  
+  // Function to send the play card request to the backend
+  const sendPlayCard = async (cardToPlay: Card, chosenSuit?: Suit) => {
+      if (!cardToPlay) {
+          setLoading(false);
+          return;
+      }
+      
+      setLoading(true);
+      setError(null);
+      
+      try {
+          const response = await fetch(`${API_URL}/play`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ card: cardToPlay, chosenSuit }),
+          });
+          
+          const result = await response.json();
+          
+          if (!response.ok) {
+              // Handle different types of errors with specific messages
+              let alertTitle = 'Invalid Move';
+              let alertMessage = result.message || 'Could not play card. Please try a different card.';
+              
+              // Customize alert based on error type
+              switch (result.errorType) {
+                  case 'INVALID_CARD_DATA':
+                      alertTitle = 'Invalid Card';
+                      alertMessage = 'The selected card is not valid. Please choose another card.';
+                      break;
+                  case 'INVALID_SUIT':
+                      alertTitle = 'Invalid Suit';
+                      alertMessage = 'This card cannot be played on the current suit. Please choose another card.';
+                      break;
+                  case 'INVALID_RANK':
+                      alertTitle = 'Invalid Rank';
+                      alertMessage = 'This card cannot be played on the current rank. Please choose another card.';
+                      break;
+                  case 'CARD_NOT_IN_HAND':
+                      alertTitle = 'Card Not Available';
+                      alertMessage = 'This card is not in your hand. Please select a card from your hand.';
+                      break;
+                  case 'INVALID_SUIT_CHOICE':
+                      alertTitle = 'Suit Required';
+                      alertMessage = 'Please select a suit to play this card.';
+                      break;
+                  case 'INVALID_MOVE':
+                      alertTitle = 'Invalid Move';
+                      break;
+              }
+              
+              // Show platform-appropriate alert
+              showAlert(
+                  alertTitle,
+                  alertMessage,
+                  [
+                      { 
+                          text: 'OK', 
+                          onPress: () => {
+                              // After dismissing the alert, re-fetch the game state
+                              // to ensure UI is in sync with the backend
+                              fetchGameState();
+                          } 
+                      }
+                  ]
+              );
+              
+              // Update error state for the UI
+              setError(alertMessage);
+              setLoading(false);
+              return;
+          }
+          
+          // Successful play, update game state from backend response
+          setGame(result);
+          setError(null);
+          console.log("Play successful, new game state:", result);
+          
+          // Check if game is over after the move
+          if (result.gameOver) {
+              showAlert(
+                  'Game Over',
+                  result.winner === 'player' ? 'Congratulations! You won!' : 'Game Over! Try again!',
+                  [{ text: 'OK' }]
+              );
+          }
+      } catch (e: any) {
+          console.error("Failed to play card:", e);
+          showAlert(
+              'Error',
+              `Failed to play card: ${e.message}. Please try again.`,
+              [{ text: 'OK' }]
+          );
+          setError(`Failed to play card: ${e.message}.`);
+          // Try to refresh the game state after an error
+          fetchGameState();
+      } finally {
+          setLoading(false);
       }
   };
-
-    // Function to send the play card request to the backend
-    const sendPlayCard = async (cardToPlay: Card, chosenSuit: Suit | null) => { // Add type annotations
-         try {
-             const response = await fetch(`${API_URL}/play`, {
-                 method: 'POST',
-                 headers: {
-                     'Content-Type': 'application/json',
-                 },
-                 body: JSON.stringify({ card: cardToPlay, chosenSuit }),
-             });
-
-             const result: GameState = await response.json(); // Type assertion
-
-             if (!response.ok) {
-                  // If backend returns an error (e.g., invalid move)
-                  Alert.alert("Invalid Move", result.message || "Could not play card.");
-                  setError(result.message || "Could not play card."); // Set error state
-                  // Don't fetch game state on invalid move, hand remains the same
-             } else {
-                 // Successful play, update game state from backend response
-                 setGame(result);
-                 setError(null); // Clear error
-                 setHasDrawnCard(false); // Reset hasDrawnCard after playing a card
-                 console.log("Play successful, new game state:", result);
-
-                 // The backend now automatically plays the app's turn after the player's valid move.
-                 // The fetched state includes the result of the app's turn.
-
-                 // If the game is not over after the app's turn, maybe fetch state again
-                 // after a short delay to clearly show the turn progression?
-                 // For now, the state from the /play response is sufficient as it includes app's move.
-             }
-
-         } catch (e: any) {
-             console.error("Failed to play card:", e);
-             setError(`Failed to play card: ${e.message}.`);
-         } finally {
-             setLoading(false); // Hide loading indicator
-         }
-    };
-
-
-    // Function to handle drawing a card
-    const handleDrawCard = async () => {
-         if (!game) return;
-         setLoading(true); // Show loading indicator
-         setError(null); // Clear any previous errors
-
-         try {
-             const response = await fetch(`${API_URL}/draw`, {
-                 method: 'POST',
-                 headers: {
-                     'Content-Type': 'application/json',
-                 },
-                 // No body needed for draw
-             });
-
-             const result: GameState = await response.json(); // Type assertion
-
-             if (!response.ok) {
-                 Alert.alert("Draw Error", result.message || "Could not draw card.");
-                 setError(result.message || "Could not draw card."); // Set error state
-             } else {
-                 setGame(result); // Update game state with the drawn card
-                 setError(null); // Clear error
-                 setHasDrawnCard(true); // Set hasDrawnCard to true after successful draw
-                 console.log("Draw successful, new game state:", result);
-                 // After drawing, it's still the player's turn to see if they can play
-                 // So no need to trigger app's turn here.
-             }
-
-         } catch (e: any) {
-             console.error("Failed to draw card:", e);
-              setError(`Failed to draw card: ${e.message}.`);
-         } finally {
-             setLoading(false); // Hide loading indicator
-         }
-    };
-
-    // Function to handle ending turn
-    const handleEndTurn = async () => {
-        if (!game) return;
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response = await fetch(`${API_URL}/end-turn`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            const result: GameState = await response.json();
-
-            if (!response.ok) {
-                Alert.alert("Error", result.message || "Could not end turn.");
-                setError(result.message || "Could not end turn.");
-            } else {
-                setGame(result);
-                setError(null);
-                setHasDrawnCard(false); // Reset hasDrawnCard after turn ends
-                console.log("Turn ended, new game state:", result);
-            }
-        } catch (e: any) {
-            console.error("Failed to end turn:", e);
-            setError(`Failed to end turn: ${e.message}.`);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-
+  
+  // Function to handle drawing a card
+  const handleDrawCard = async () => {
+      if (!game) return;
+      setLoading(true);
+      setError(null);
+      
+      try {
+          const response = await fetch(`${API_URL}/draw`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+          });
+          
+          const result = await response.json();
+          
+          if (!response.ok) {
+              throw new Error(result.message || 'Failed to draw a card');
+          }
+          
+          // Update game state with the drawn card
+          setGame(result);
+          setHasDrawnCard(true);
+          
+      } catch (e: any) {
+          console.error("Failed to draw card:", e);
+          showAlert('Error', `Failed to draw a card: ${e.message}`);
+          setError(`Failed to draw a card: ${e.message}`);
+      } finally {
+          setLoading(false);
+      }
+  };
+  
+  // Function to end the player's turn
+  const endTurn = async () => {
+      if (!game) return;
+      setLoading(true);
+      setError(null);
+      
+      try {
+          const response = await fetch(`${API_URL}/end-turn`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+          });
+          
+          const result = await response.json();
+          
+          if (!response.ok) {
+              throw new Error(result.message || 'Failed to end turn');
+          }
+          
+          // Update game state
+          setGame(result);
+          setHasDrawnCard(false);
+          
+          // If it's still the app's turn (e.g., it needs to play a card), let it play
+          if (result.currentPlayer === 'app') {
+              // Simulate app's turn after a short delay
+              setTimeout(() => {
+                  fetchGameState();
+              }, 1000);
+          }
+          
+      } catch (e: any) {
+          console.error("Failed to end turn:", e);
+          showAlert('Error', `Failed to end turn: ${e.message}`);
+          setError(`Failed to end turn: ${e.message}`);
+      } finally {
+          setLoading(false);
+      }
+  };
+  
+  // Function to render the suit selection modal
+  const renderSuitModal = () => (
+      <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showSuitModal}
+          onRequestClose={() => setShowSuitModal(false)}
+      >
+          <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                  <Text style={styles.modalTitle}>Choose a Suit</Text>
+                  <View style={styles.suitButtonsContainer}>
+                      {SUITS.map((suit) => (
+                          <TouchableOpacity
+                              key={suit}
+                              style={[
+                                  styles.suitButton,
+                                  (suit === 'Hearts' || suit === 'Diamonds') && { backgroundColor: '#ffebee' },
+                              ]}
+                              onPress={() => handleSuitSelect(suit)}
+                          >
+                              <Text style={[
+                                  styles.suitButtonText,
+                                  (suit === 'Hearts' || suit === 'Diamonds') && { color: 'red' }
+                              ]}>
+                                  {getSuitSymbol(suit)} {suit}
+                              </Text>
+                          </TouchableOpacity>
+                      ))}
+                  </View>
+                  <Button title="Cancel" onPress={() => setShowSuitModal(false)} />
+              </View>
+          </View>
+      </Modal>
+  );
+  
+  
   if (loading) {
     return (
       <View style={styles.container}>
@@ -362,7 +504,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={suit}
                   style={styles.suitButton}
-                  onPress={() => handleSuitSelection(suit)}
+                  onPress={() => handleSuitSelect(suit)}
                 >
                   <Text style={[styles.suitButtonText, { color: (suit === 'Hearts' || suit === 'Diamonds') ? 'red' : 'black' }]}>
                     {getSuitSymbol(suit)} {suit}
@@ -432,7 +574,7 @@ export default function HomeScreen() {
                     {hasDrawnCard && (
                         <Button 
                             title="End Turn" 
-                            onPress={handleEndTurn} 
+                            onPress={endTurn} 
                             disabled={game.gameOver || loading} 
                         />
                     )}
@@ -502,20 +644,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: 5, // Add some padding to the sides of the scroll view content
     },
    card: {
-       width: 60, // Card width
-       height: 90, // Card height
-       backgroundColor: '#fff',
+       width: 80,
+       height: 120,
+       backgroundColor: 'white',
        borderRadius: 8,
-       borderWidth: 1,
-       borderColor: '#999',
-       marginRight: 10, // Space between cards
        justifyContent: 'center',
        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 1, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 3,
-        elevation: 3, // For Android shadow
+       margin: 5,
+       shadowColor: '#000',
+       shadowOffset: { width: 0, height: 2 },
+       shadowOpacity: 0.25,
+       shadowRadius: 3.84,
+       elevation: 5,
    },
    cardRank: {
        fontSize: 24,
