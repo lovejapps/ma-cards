@@ -3,28 +3,49 @@ const Deck = require('./deck');
 const { Card, SUITS } = require('./card');
 
 class GameState {
-    constructor(playerIds) {
-        this.playerIds = playerIds; // Array of player socket IDs
-        this.players = {}; // Object to hold player data, keyed by ID
+    constructor(initialPlayers) { // initialPlayers is an array of {id, name}
+        this.players = {}; // { id: { name, hand } }
+        initialPlayers.forEach(p => {
+            this.players[p.id] = { name: p.name, hand: [] };
+        });
+        this.playerIds = Object.keys(this.players);
+
         this.deck = new Deck();
         this.deck.shuffle();
         this.discardPile = [];
-        this.currentSuit = null; // Used when an 8 is played
+        this.currentSuit = null;
         this.gameOver = false;
         this.winner = null;
         this.message = "";
-        this.turn = null; // Who's turn is it? (player ID)
+        this.turn = null;
+    }
 
-        // Initialize players
-        this.playerIds.forEach(playerId => {
-            this.players[playerId] = {
-                hand: [],
-                id: playerId
-            };
-        });
+    addPlayer(player) { // player is {id, name}
+        if (Object.keys(this.players).length < 2) {
+            this.players[player.id] = { name: player.name, hand: [] };
+            this.playerIds.push(player.id);
+        }
+    }
+
+    removePlayer(playerId) {
+        const playerIndex = this.playerIds.indexOf(playerId);
+        if (playerIndex > -1) {
+            this.playerIds.splice(playerIndex, 1);
+        }
+        delete this.players[playerId];
+    }
+
+    endGame() {
+        this.gameOver = true;
+        this.message = "Game has ended due to a player disconnecting.";
     }
 
     startNewGame() {
+        if (this.playerIds.length < 2) {
+            this.message = "Not enough players to start the game.";
+            return;
+        }
+
         // Deal initial hands (e.g., 8 cards each)
         try {
             this.playerIds.forEach(playerId => {
@@ -56,7 +77,8 @@ class GameState {
 
         // Set the first player's turn
         this.turn = this.playerIds[0];
-        this.message += ` It's player ${this.turn}'s turn.`
+        const firstPlayerName = this.players[this.turn].name;
+        this.message += ` It's ${firstPlayerName}'s turn.`
 
         console.log("Game started.");
     }
@@ -74,46 +96,53 @@ class GameState {
 
     playCard(playerId, cardToPlayData, chosenSuit = null) {
         if (this.turn !== playerId) {
-            throw new Error("It's not your turn.");
+            return { success: false, message: "It's not your turn." };
         }
 
         const player = this.players[playerId];
         const cardIndex = player.hand.findIndex(card => card.suit === cardToPlayData.suit && card.rank === cardToPlayData.rank);
 
         if (cardIndex === -1) {
-            throw new Error(`Card not found in your hand.`);
+            return { success: false, message: 'Card not found in your hand.' };
         }
 
         const card = player.hand[cardIndex];
 
         if (!this.isValidPlay(card)) {
-            throw new Error(`Invalid play. You cannot play ${card.toString()} on ${this.getTopCard().toString()}.`);
+            return { success: false, message: `Invalid play. You cannot play ${card.toString()} on ${this.getTopCard().toString()}.` };
         }
 
         // Move card from hand to discard pile
         const [playedCard] = player.hand.splice(cardIndex, 1);
         this.discardPile.push(playedCard);
 
+        const playerName = this.players[playerId].name;
         // Handle special card logic (e.g., for '8')
         if (playedCard.rank === '8') {
             if (!chosenSuit || !SUITS.includes(chosenSuit)) {
-                throw new Error("When playing an 8, you must choose a valid suit.");
+                // This case should ideally be prevented by the client, but as a fallback:
+                player.hand.splice(cardIndex, 0, playedCard); // return card to hand
+                this.discardPile.pop();
+                return { success: false, message: "When playing an 8, you must choose a valid suit." };
             }
             this.currentSuit = chosenSuit;
-            this.message = `Player ${playerId} played an 8 and chose ${this.currentSuit}.`;
+            this.message = `${playerName} played an 8 and chose ${this.currentSuit}.`;
         } else {
             this.currentSuit = playedCard.suit;
-            this.message = `Player ${playerId} played ${playedCard.toString()}.`;
+            this.message = `${playerName} played ${playedCard.toString()}.`;
         }
 
-        if (this.checkWin(playerId)) return;
+        if (this.checkWin(playerId)) {
+            return { success: true };
+        }
 
         this.nextTurn();
+        return { success: true };
     }
 
     drawCard(playerId) {
         if (this.turn !== playerId) {
-            throw new Error("It's not your turn to draw.");
+            return { success: false, message: "It's not your turn to draw." };
         }
 
         if (this.deck.cards.length === 0) {
@@ -121,7 +150,7 @@ class GameState {
                 this.message = "No cards left to draw. The game is a draw.";
                 this.gameOver = true;
                 this.winner = 'draw';
-                return;
+                return { success: true };
             }
             // Reshuffle discard pile into deck
             const topCard = this.discardPile.pop();
@@ -133,23 +162,26 @@ class GameState {
 
         const drawnCard = this.deck.deal(1)[0];
         this.players[playerId].hand.push(drawnCard);
-        this.message = `Player ${playerId} drew a card.`;
+        this.message = `${this.players[playerId].name} drew a card.`;
         // The player who draws can end their turn, they don't get to play the card immediately.
         this.nextTurn();
+        return { success: true };
     }
 
     nextTurn() {
         const currentIndex = this.playerIds.indexOf(this.turn);
         const nextIndex = (currentIndex + 1) % this.playerIds.length;
         this.turn = this.playerIds[nextIndex];
-        this.message += ` It's now player ${this.turn}'s turn.`;
+        const nextPlayerName = this.players[this.turn].name;
+        this.message += ` It's now ${nextPlayerName}'s turn.`;
     }
 
     checkWin(playerId) {
         if (this.players[playerId].hand.length === 0) {
             this.gameOver = true;
             this.winner = playerId;
-            this.message = `Player ${playerId} wins!`;
+            const winnerName = this.players[playerId].name;
+            this.message = `${winnerName} wins!`;
             return true;
         }
         return false;
@@ -157,19 +189,25 @@ class GameState {
 
     // Get state from the perspective of a specific player
     getStateForPlayer(playerId) {
+        const winnerName = this.winner ? this.players[this.winner]?.name : null;
         return {
             myHand: this.players[playerId].hand.map(card => card.toJSON()),
             opponents: this.playerIds
                 .filter(id => id !== playerId)
-                .map(id => ({ id, handSize: this.players[id].hand.length })),
+                .map(id => ({ 
+                    id, 
+                    name: this.players[id].name, 
+                    handSize: this.players[id].hand.length 
+                })),
             topCard: this.getTopCard() ? this.getTopCard().toJSON() : null,
             currentSuit: this.currentSuit,
             turn: this.turn,
             gameOver: this.gameOver,
             winner: this.winner,
+            winnerName: winnerName,
             message: this.message,
             myId: playerId,
-            playerIds: this.playerIds
+            players: this.players
         };
     }
 }
