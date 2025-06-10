@@ -32,7 +32,7 @@ const broadcastGameState = (roomId) => {
 io.on('connection', (socket) => {
     console.log(`Player connected: ${socket.id}`);
 
-    socket.on('createGame', ({ playerName }) => {
+    socket.on('createRoom', ({ playerName }) => {
         const roomId = `game-${Math.random().toString(36).substr(2, 9)}`;
         socket.join(roomId);
 
@@ -42,11 +42,11 @@ io.on('connection', (socket) => {
             players: { [socket.id]: playerName }
         };
 
-        socket.emit('gameCreated', { roomId, playerId: socket.id, playerName });
+        socket.emit('roomCreated', { roomId, playerId: socket.id, playerName });
         console.log(`Player ${playerName} (${socket.id}) created room ${roomId}`);
     });
 
-    socket.on('joinGame', ({ roomId, playerName }) => {
+    socket.on('joinRoom', ({ roomId, playerName }) => {
         const room = rooms[roomId];
         if (room && Object.keys(room.players).length < 2) {
             socket.join(roomId);

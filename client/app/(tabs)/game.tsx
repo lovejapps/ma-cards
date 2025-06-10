@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,428 +13,234 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
-
-// Platform-specific alert function
-const showAlert = (title: string, message: string, buttons: { text: string; onPress?: () => void }[] = []) => {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n\n${message}`);
-    const okButton = buttons.find((btn) => btn.text === 'OK' || btn.text === 'Ok' || btn.text === 'ok');
-    if (okButton && okButton.onPress) {
-      okButton.onPress();
-    }
-  } else {
-    Alert.alert(title, message, buttons);
-  }
-};
+import { Card as CardComponent } from '../../components/Card';
+import { GameState as ServerGameState, Card as CardType, Suit } from '../../types';
+import { GameState as LocalGameState } from '../../logic/gameState';
+import { Card } from '../../logic/card';
 
 const WEBSOCKET_URL = 'http://localhost:3000';
 
-type Suit = 'Hearts' | 'Diamonds' | 'Clubs' | 'Spades';
-const SUITS: Suit[] = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
-type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'Jack' | 'Queen' | 'King' | 'Ace';
-
-interface Card {
-  suit: Suit;
-  rank: Rank;
-}
-
-interface Opponent {
-  id: string;
-  name: string;
-  handSize: number;
-}
-
-interface GameState {
-  myHand: Card[];
-  opponents: Opponent[];
-  topCard: Card | null;
+// Unified game state type for rendering
+interface GameView {
+  myHand: CardType[];
+  opponents: { id: string; name: string; handSize: number }[];
+  topCard: CardType | null;
   currentSuit: Suit | null;
-  turn: string | null; // player ID
+  turn: string; // Can be player ID or 'computer'
   gameOver: boolean;
   winner: string | null;
-  winnerName?: string;
   message: string;
   myId: string;
-  players: { [id: string]: { name: string; hand: Card[] } };
-  roomId?: string;
 }
 
 export default function GameScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { action, playerName, roomId: initialRoomId } = params;
+  const { gameMode, playerName, roomId, action } = params;
 
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [game, setGame] = useState<GameState | null>(null);
-  const [roomId, setRoomId] = useState<string | null>(initialRoomId as string || null);
-  const [status, setStatus] = useState<string>('connecting'); // connecting, waiting, playing
-  const [showSuitModal, setShowSuitModal] = useState<boolean>(false);
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [localGame, setLocalGame] = useState<LocalGameState | null>(null);
+  const [game, setGame] = useState<GameView | null>(null);
+  const [status, setStatus] = useState(gameMode === 'singleplayer' ? 'playing' : 'connecting');
+  const [suitChoice, setSuitChoice] = useState<{ show: boolean, card: CardType | null }>({ show: false, card: null });
+
+  const showAlert = (title: string, message: string, buttons?: any[]) => {
+    if (Platform.OS === 'web') {
+      alert(`${title}: ${message}`);
+      if (buttons && buttons[0].onPress) buttons[0].onPress();
+    } else {
+      Alert.alert(title, message, buttons);
+    }
+  };
+
+  const updateGameStateView = useCallback((state: LocalGameState | ServerGameState, localPlayerId?: string) => {
+    if (state instanceof LocalGameState) {
+      const localState = state.getStateForPlayer(localPlayerId || 'player1');
+      if(localState) setGame(localState as GameView);
+    } else {
+      // This is a hack to make the server state conform to the GameView
+      const serverState = state as any;
+      serverState.winner = serverState.winnerName;
+      setGame(serverState as GameView);
+    }
+  }, []);
 
   useEffect(() => {
-    const newSocket = io(WEBSOCKET_URL);
-    setSocket(newSocket);
+    if (gameMode === 'singleplayer') {
+      const newLocalGame = new LocalGameState([playerName as string]);
+      setLocalGame(newLocalGame);
+      updateGameStateView(newLocalGame, 'player1');
+    } else {
+      const newSocket = io(WEBSOCKET_URL);
+      setSocket(newSocket);
 
-    newSocket.on('connect', () => {
-      console.log('Connected to server!');
-      if (action === 'create') {
-        newSocket.emit('createGame', { playerName });
+      newSocket.on('connect', () => {
+        console.log('Connected to server');
         setStatus('waiting');
-      } else if (action === 'join' && initialRoomId) {
-        newSocket.emit('joinGame', { roomId: initialRoomId, playerName });
-      }
-    });
+        if (action === 'create') newSocket.emit('createRoom', { playerName });
+        else if (action === 'join') newSocket.emit('joinRoom', { playerName, roomId });
+      });
 
-    newSocket.on('gameCreated', ({ roomId: newRoomId }) => {
-      setRoomId(newRoomId);
-      console.log(`Game created with ID: ${newRoomId}`);
-    });
+      newSocket.on('roomCreated', ({ roomId }) => router.setParams({ roomId }));
+      newSocket.on('gameState', (gs: ServerGameState) => {
+        updateGameStateView(gs);
+        if (gs.players && Object.keys(gs.players).length === 2) setStatus('playing');
+      });
+      newSocket.on('invalidMove', ({ message }) => showAlert('Invalid Move', message));
+      newSocket.on('gameError', ({ message }) => showAlert('Error', message, [{ text: 'OK', onPress: () => router.back() }]));
+      newSocket.on('opponentDisconnected', (message) => showAlert('Opponent Left', message, [{ text: 'OK', onPress: () => router.back() }]));
+      newSocket.on('disconnect', () => setStatus('connecting'));
 
-    newSocket.on('gameStart', ({ players }) => {
-      setStatus('playing');
-      console.log(`Game started with players:`, players);
-    });
+      return () => newSocket.disconnect();
+    }
+    return () => {}; // Add an empty cleanup function for the single-player case
+  }, [gameMode, playerName, action, updateGameStateView]);
 
-    newSocket.on('gameState', (gameState: GameState) => {
-      setGame(gameState);
-      if (gameState.gameOver) {
-        showAlert('Game Over', gameState.winnerName ? `${gameState.winnerName} won!` : 'Game Over!', [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
-      }
-    });
+  useEffect(() => {
+    if (game?.gameOver) {
+      showAlert('Game Over', `${game.winner} has won the game!`, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    }
+  }, [game?.gameOver, game?.winner, router]);
 
-    newSocket.on('invalidMove', ({ message }) => {
-      showAlert('Invalid Move', message);
-    });
+  useEffect(() => {
+    if (gameMode === 'singleplayer' && game?.turn === 'computer' && localGame && !game.gameOver) {
+      setTimeout(() => {
+        localGame.computerTurn();
+        updateGameStateView(localGame, 'player1');
+      }, 1000);
+    }
+  }, [game?.turn, localGame, gameMode, updateGameStateView, game?.gameOver]);
 
-    newSocket.on('gameError', ({ message }) => {
-      showAlert('Error', message, [{ text: 'OK', onPress: () => router.back() }]);
-    });
-
-    newSocket.on('opponentDisconnected', (message: string) => {
-      showAlert('Opponent Disconnected', message, [{ text: 'OK', onPress: () => router.back() }]);
-      setGame(null);
-      setRoomId(null);
-    });
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, [action, playerName, initialRoomId, router]);
-
-  const handlePlayCard = (cardToPlay: Card) => {
-      if (!game || game.gameOver || game.turn !== game.myId) return;
-
-      if (cardToPlay.rank === '8') {
-          setSelectedCard(cardToPlay);
-          setShowSuitModal(true);
+  const handlePlayCard = (card: CardType) => {
+    if (card.rank === '8') {
+      setSuitChoice({ show: true, card });
+    } else {
+      if (gameMode === 'singleplayer' && localGame) {
+        const result = localGame.playCard('player1', new Card(card.suit, card.rank));
+        if (result.success) updateGameStateView(localGame, 'player1');
+        else showAlert('Invalid Move', result.message);
       } else {
-          sendPlayCard(cardToPlay);
-      }
-  };
-
-  const handleSuitSelect = (suit: Suit) => {
-      if (selectedCard && socket && roomId) {
-          sendPlayCard(selectedCard, suit);
-      }
-      setShowSuitModal(false);
-      setSelectedCard(null);
-  };
-
-  const sendPlayCard = (cardToPlay: Card, chosenSuit?: Suit) => {
-      if (socket && roomId) {
-          socket.emit('playCard', { roomId, card: cardToPlay, chosenSuit });
-      }
-  };
-
-  const handleDrawCard = () => {
-      if (socket && roomId && game && game.turn === game.myId) {
-          socket.emit('drawCard', { roomId });
-      }
-  };
-
-  const getSuitSymbol = (suit: Suit): string => {
-      switch (suit) {
-          case 'Hearts': return '♥';
-          case 'Diamonds': return '♦';
-          case 'Clubs': return '♣';
-          case 'Spades': return '♠';
-          default: return '';
-      }
-  };
-
-  const renderCard = (card: Card, index: number, onPress: ((card: Card) => void) | null = null) => {
-      const suitColor: string = (card.suit === 'Hearts' || card.suit === 'Diamonds') ? 'red' : 'black';
-      const isPlayable = game && game.turn === game.myId && !game.gameOver;
-
-      return (
-          <TouchableOpacity key={index} style={styles.card} onPress={() => isPlayable && onPress ? onPress(card) : null} disabled={!isPlayable}>
-              <Text style={styles.cardRank}>{card.rank}</Text>
-              <Text style={[styles.cardSuit, { color: suitColor }]}>{getSuitSymbol(card.suit)}</Text>
-          </TouchableOpacity>
-      );
-  };
-
-  const handleCopyRoomId = () => {
-    if (roomId) {
-      if (Platform.OS === 'web') {
-        navigator.clipboard.writeText(roomId)
-          .then(() => showAlert('Copied!', 'Room ID copied to clipboard.'))
-          .catch(() => showAlert('Error', 'Failed to copy Room ID.'));
-      } else {
-        Clipboard.setString(roomId);
-        showAlert('Copied!', 'Room ID copied to clipboard.');
+        socket?.emit('playCard', { roomId, card });
       }
     }
   };
 
-  if (status === 'connecting') {
-      return <View style={[styles.container, styles.contentContainer]}><ActivityIndicator size="large" /><Text>Connecting to server...</Text></View>;
-  }
+  const handleChooseSuit = (suit: Suit) => {
+    if (suitChoice.card) {
+      if (gameMode === 'singleplayer' && localGame) {
+        const result = localGame.playCard('player1', new Card(suitChoice.card.suit, suitChoice.card.rank), suit);
+        if (result.success) updateGameStateView(localGame, 'player1');
+        else showAlert('Invalid Move', result.message);
+      } else {
+        socket?.emit('playCard', { roomId, card: suitChoice.card, chosenSuit: suit });
+      }
+      setSuitChoice({ show: false, card: null });
+    }
+  };
+
+  const handleDrawCard = () => {
+    if (gameMode === 'singleplayer' && localGame) {
+      const result = localGame.drawCard('player1');
+      if (result.success) updateGameStateView(localGame, 'player1');
+      else showAlert('Invalid Move', result.message);
+    } else {
+      socket?.emit('drawCard', { roomId });
+    }
+  };
+
+  const handleCopyRoomId = () => {
+    if (roomId) {
+      const id = roomId as string;
+      if (Platform.OS === 'web') navigator.clipboard.writeText(id).then(() => showAlert('Copied!', 'ID copied.'));
+      else { Clipboard.setString(id); showAlert('Copied!', 'ID copied.'); }
+    }
+  };
+
+  if (status === 'connecting') return <View style={styles.center}><ActivityIndicator size="large" /><Text>Connecting...</Text></View>;
 
   if (status === 'waiting') {
     return (
-      <View style={[styles.container, styles.contentContainer]}>
+      <View style={styles.center}>
         <Text style={styles.title}>Waiting for Opponent...</Text>
-        {roomId ? (
-          <>
-            <Text style={styles.infoText}>Share this Room ID with your friend:</Text>
-            <View style={styles.roomIdContainer}>
-              <Text style={styles.roomIdText}>{roomId}</Text>
-              <TouchableOpacity style={styles.copyButton} onPress={handleCopyRoomId}>
-                <Text style={styles.buttonText}>Copy ID</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          <ActivityIndicator size="large" />
-        )}
-        <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
+        <Text style={styles.infoText}>Share Room ID:</Text>
+        <View style={styles.roomIdContainer}>
+          <Text style={styles.roomIdText}>{roomId}</Text>
+          <TouchableOpacity style={styles.copyButton} onPress={handleCopyRoomId}><Text style={styles.buttonText}>Copy</Text></TouchableOpacity>
+        </View>
+        <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
       </View>
     );
   }
 
+  if (!game) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Modal
-            transparent={true}
-            visible={showSuitModal}
-            onRequestClose={() => setShowSuitModal(false)} >
-            <View style={styles.modalContainer}>
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Choose a Suit</Text>
-                    {SUITS.map((suit) => (
-                        <TouchableOpacity key={suit} style={styles.button} onPress={() => handleSuitSelect(suit)}>
-                            <Text style={styles.buttonText}>{suit}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
-        </Modal>
-        {game ? (
-            <View>
-                                <View style={styles.header}>
-                    <Text style={styles.headerText}>Room: {roomId}</Text>
-                    <TouchableOpacity style={styles.copyButtonSmall} onPress={handleCopyRoomId}>
-                        <Text style={styles.copyButtonText}>Copy ID</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => {if(socket) socket.disconnect(); router.back()}}>
-                        <Text style={styles.leaveButtonText}>Leave Game</Text>
-                    </TouchableOpacity>
-                </View>
-                <View style={styles.opponentInfo}>
-                    {game.opponents.map(op => <Text key={op.id}>{op.name}: {op.handSize} cards</Text>)}
-                </View>
+    <View style={styles.container}>
+      <Modal transparent visible={suitChoice.show} onRequestClose={() => setSuitChoice({ show: false, card: null })}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text>Choose a suit</Text>
+            {['Hearts', 'Diamonds', 'Clubs', 'Spades'].map(s => (
+              <TouchableOpacity key={s} onPress={() => handleChooseSuit(s as Suit)}><Text style={styles.suitChoice}>{s}</Text></TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
 
-                <View style={styles.playArea}>
-                    <Text>Top Card:</Text>
-                    {game.topCard ? renderCard(game.topCard, -1) : <Text>No card</Text>}
-                    <Text>Current Suit: {game.currentSuit ? getSuitSymbol(game.currentSuit) : 'None'}</Text>
-                </View>
-
-                <View style={styles.playerHandContainer}>
-                    <Text>Your Hand ({game.myHand.length} cards):</Text>
-                    <ScrollView horizontal>
-                        {game.myHand.map((card, index) => renderCard(card, index, handlePlayCard))}
-                    </ScrollView>
-                </View>
-
-                <View style={styles.actionsContainer}>
-                    <TouchableOpacity style={styles.button} onPress={handleDrawCard} disabled={game.turn !== game.myId || game.gameOver}>
-                        <Text style={styles.buttonText}>Draw Card</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <Text style={styles.messageText}>{game.message}</Text>
-                                <Text style={styles.turnIndicator}>
-                    {game.gameOver ? `Game Over! ${game.winnerName ? `${game.winnerName} wins!` : 'You lose.'}` : (game.turn === game.myId ? "It's your turn!" : `Waiting for ${game.players[game.turn!]?.name}...`)}
-                </Text>
-            </View>
-        ) : (
-            <ActivityIndicator size="large" />
+      <View style={styles.gameArea}>
+        {gameMode === 'multiplayer' && (
+          <View style={styles.header}>
+            <Text style={styles.headerText}>Room: {roomId}</Text>
+            <TouchableOpacity style={styles.copyButtonSmall} onPress={handleCopyRoomId}><Text style={styles.copyButtonText}>Copy ID</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { socket?.disconnect(); router.back(); }}><Text style={styles.leaveButtonText}>Leave</Text></TouchableOpacity>
+          </View>
         )}
-    </ScrollView>
+        <View style={styles.opponentInfo}>
+          {game.opponents.map(op => <Text key={op.id}>{op.name}: {op.handSize} cards</Text>)}
+        </View>
+        <View style={styles.deckArea}>
+          <TouchableOpacity onPress={handleDrawCard} disabled={game.turn !== game.myId}><View style={styles.cardBack} /></TouchableOpacity>
+          {game.topCard && <CardComponent card={game.topCard} />}
+          {game.currentSuit && <Text>Suit: {game.currentSuit}</Text>}
+        </View>
+        <Text style={styles.statusMessage}>{game.message}</Text>
+        <ScrollView horizontal style={styles.hand}>
+          {game.myHand.map((card, index) => (
+            <TouchableOpacity key={index} onPress={() => handlePlayCard(card)} disabled={game.turn !== game.myId}>
+              <CardComponent card={card} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  infoText: {
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  roomIdContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  roomIdText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginRight: 10,
-  },
-  copyButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 5,
-  },
-  copyButtonSmall: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    marginHorizontal: 10,
-  },
-  copyButtonText: {
-    color: 'white',
-    fontSize: 14,
-  },
-  leaveButtonText: {
-    color: 'red',
-    fontSize: 14,
-  },
-  cancelButton: {
-    backgroundColor: '#dc3545',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    width: '80%',
-    marginTop: 20,
-  },
-  cancelButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  header: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    backgroundColor: '#f8f8f8',
-  },
-  headerText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  contentContainer: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 10,
-    borderRadius: 5,
-    margin: 5,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  opponentInfo: {
-    margin: 10,
-    alignItems: 'center',
-  },
-  playArea: {
-    alignItems: 'center',
-    margin: 10,
-  },
-  playerHandContainer: {
-    margin: 10,
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    margin: 10,
-  },
-  messageText: {
-    margin: 10,
-    textAlign: 'center',
-  },
-  turnIndicator: {
-    margin: 10,
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 18,
-  },
-  card: {
-    width: 80,
-    height: 120,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  cardRank: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  cardSuit: {
-    fontSize: 20,
-  },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  infoText: { fontSize: 16, marginBottom: 10 },
+  roomIdContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: '#fff', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
+  roomIdText: { fontSize: 18, fontWeight: 'bold', marginRight: 10 },
+  copyButton: { backgroundColor: '#007AFF', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 5 },
+  copyButtonSmall: { backgroundColor: '#007AFF', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5, marginHorizontal: 10 },
+  copyButtonText: { color: 'white', fontSize: 14 },
+  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  leaveButtonText: { color: 'red', fontSize: 14 },
+  cancelButton: { backgroundColor: '#dc3545', padding: 15, borderRadius: 8, alignItems: 'center', width: '80%', marginTop: 20 },
+  cancelButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#ccc', backgroundColor: '#f8f8f8' },
+  headerText: { fontSize: 16, fontWeight: 'bold' },
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0' },
+  gameArea: { flex: 1, width: '100%' },
+  opponentInfo: { padding: 10, alignItems: 'center' },
+  deckArea: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 20 },
+  cardBack: { width: 70, height: 100, backgroundColor: 'blue', borderRadius: 8 },
+  hand: { padding: 10 },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10, alignItems: 'center' },
+  suitChoice: { padding: 10, fontSize: 18 },
+  statusMessage: { textAlign: 'center', fontSize: 18, fontWeight: 'bold', marginVertical: 10 },
 });

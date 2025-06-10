@@ -12,8 +12,7 @@ export default function LobbyScreen() {
       Alert.alert('Player name is required.');
       return;
     }
-    // Navigate to the game screen, passing params for creating a new game
-    router.push({ pathname: '/game', params: { action: 'create', playerName } });
+    router.push({ pathname: '/game', params: { gameMode: 'multiplayer', action: 'create', playerName } });
   };
 
   const handleJoinGame = () => {
@@ -21,8 +20,15 @@ export default function LobbyScreen() {
       Alert.alert('Player name and Room ID are required.');
       return;
     }
-    // Navigate to the game screen, passing params for joining an existing game
-    router.push({ pathname: '/game', params: { action: 'join', playerName, roomId } });
+    router.push({ pathname: '/game', params: { gameMode: 'multiplayer', action: 'join', playerName, roomId } });
+  };
+
+  const handlePlayWithComputer = () => {
+    if (!playerName.trim()) {
+      Alert.alert('Player name is required.');
+      return;
+    }
+    router.push({ pathname: '/game', params: { gameMode: 'singleplayer', playerName } });
   };
 
   return (
@@ -48,6 +54,12 @@ export default function LobbyScreen() {
       />
       <TouchableOpacity style={styles.button} onPress={handleJoinGame}>
         <Text style={styles.buttonText}>Join Game</Text>
+      </TouchableOpacity>
+
+      <View style={styles.divider} />
+
+      <TouchableOpacity style={styles.button} onPress={handlePlayWithComputer}>
+        <Text style={styles.buttonText}>Play with Computer</Text>
       </TouchableOpacity>
     </View>
   );
