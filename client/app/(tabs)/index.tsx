@@ -2,14 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Button,
   Modal,
+  Pressable,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TextStyle,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -36,12 +35,12 @@ const showAlert = (title: string, message: string, buttons: {text: string, onPre
 // Example: const API_URL = 'http://192.168.1.100:3000';
 const API_URL = 'http://localhost:3000'; // Use localhost if running in a simulator on the same machine
 
-// Define suits for the suit picker (can also import from backend/card.js if you want)
-const SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades'] as const; // Use 'as const' for a tuple type
-type Suit = typeof SUITS[number]; // Type for a single suit
+// Define suits for the suit picker
+type Suit = 'Hearts' | 'Diamonds' | 'Clubs' | 'Spades';
+const SUITS: Suit[] = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
-const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'] as const;
-type Rank = typeof RANKS[number]; // Type for a single rank
+// Define Rank type without unused RANKS array
+type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'Jack' | 'Queen' | 'King' | 'Ace'; // Type for a single rank
 
 
 // Define interface for a Card object (should match the structure from your backend)
@@ -64,9 +63,12 @@ interface GameState {
     discardPileSize: number;
 }
 
+// Remove unused renderSuitModal
+// const renderSuitModal = () => { ... };
+
 
 export default function HomeScreen() {
-  const [playerName, setPlayerName] = useState<string>('');
+  const [playerName, setPlayerName] = useState<string>('LJ');
   const [game, setGame] = useState<GameState | null>(null); // State can be GameState object or null
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,15 +110,44 @@ export default function HomeScreen() {
            setLoading(false);
       }
   };
+  
+  // Memoize fetchGameState to prevent unnecessary re-renders
+  const memoizedFetchGameState = React.useCallback(async () => {
+    if (!isGameStarted) return; // Only fetch if a game has been started
 
-
-    // Fetch game state when the component mounts or when isGameStarted changes
-    // This allows reconnecting to an existing game if the app is refreshed and a game is running on the backend
-    useEffect(() => {
-        if (isGameStarted) {
-            fetchGameState();
+    try {
+        setLoading(true); // Show loading indicator while fetching
+        const response = await fetch(`${API_URL}/state`);
+        if (!response.ok) {
+            // If the backend isn't running or no game is in progress, handle it
+            if (response.status === 404) {
+                setError("No game in progress. Please start a new game.");
+                setGame(null); // Clear previous game state
+                setIsGameStarted(false); // Reset game started state
+            } else {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
         }
-    }, [isGameStarted]); // Depend on isGameStarted
+        const gameState: GameState = await response.json(); // Type assertion
+        setGame(gameState);
+        setError(null); // Clear any previous errors
+        console.log("Fetched game state:", gameState); // Log state for debugging
+    } catch (e: any) {
+        console.error("Failed to fetch game state:", e);
+        setError(`Failed to connect to the game server or fetch state: ${e.message}. Make sure the backend is running at ${API_URL}`);
+        setGame(null); // Clear game state on error
+        setIsGameStarted(false); // Reset game started state
+    } finally {
+        setLoading(false);
+    }
+  }, [isGameStarted]);
+
+  // Fetch game state when the component mounts or when isGameStarted changes
+  useEffect(() => {
+    if (isGameStarted) {
+      memoizedFetchGameState();
+    }
+  }, [isGameStarted, memoizedFetchGameState]);
 
   // Function to start a new game
   const startGame = async () => {
@@ -159,13 +190,16 @@ export default function HomeScreen() {
   };
 
     // Function to render a single card
-    const renderCard = (card: Card, index: number, onPress: ((card: Card) => void) | null = null) => { // Add type annotations
+    const renderCard = (card: Card, index: number, onPress: ((card: Card) => void) | null = null) => {
         // Determine color for Hearts and Diamonds
-        const suitColor: TextStyle['color'] = (card.suit === 'Hearts' || card.suit === 'Diamonds') ? 'red' : 'black';
+        const suitColor: string = (card.suit === 'Hearts' || card.suit === 'Diamonds') ? 'red' : 'black';
 
         return (
             // Use card.suit and card.rank from the object received from backend
-            <View key={index} style={styles.card} onStartShouldSetResponder={() => { if(!game?.gameOver && onPress) onPress(card); return true; }}>
+            <View key={index} style={styles.card} onStartShouldSetResponder={() => { 
+                if (!game?.gameOver && onPress) onPress(card); 
+                return true; 
+            }}>
                 <Text style={styles.cardRank}>{card.rank}</Text>
                 <Text style={[styles.cardSuit, { color: suitColor }]}>{getSuitSymbol(card.suit)}</Text>
             </View>
@@ -398,42 +432,9 @@ export default function HomeScreen() {
       }
   };
   
-  // Function to render the suit selection modal
-  const renderSuitModal = () => (
-      <Modal
-          animationType="slide"
-          transparent={true}
-          visible={showSuitModal}
-          onRequestClose={() => setShowSuitModal(false)}
-      >
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Choose a Suit</Text>
-                  <View style={styles.suitButtonsContainer}>
-                      {SUITS.map((suit) => (
-                          <TouchableOpacity
-                              key={suit}
-                              style={[
-                                  styles.suitButton,
-                                  (suit === 'Hearts' || suit === 'Diamonds') && { backgroundColor: '#ffebee' },
-                              ]}
-                              onPress={() => handleSuitSelect(suit)}
-                          >
-                              <Text style={[
-                                  styles.suitButtonText,
-                                  (suit === 'Hearts' || suit === 'Diamonds') && { color: 'red' }
-                              ]}>
-                                  {getSuitSymbol(suit)} {suit}
-                              </Text>
-                          </TouchableOpacity>
-                      ))}
-                  </View>
-                  <Button title="Cancel" onPress={() => setShowSuitModal(false)} />
-              </View>
-          </View>
-      </Modal>
-  );
+
   
+
   
   if (loading) {
     return (
@@ -449,11 +450,13 @@ export default function HomeScreen() {
            <View style={styles.container}>
                <Text style={styles.errorText}>{error}</Text>
                {/* Option to retry starting game */}
-               <Button title="Start New Game" onPress={() => {
+               <Pressable style={styles.button} onPress={() => {
                    setIsGameStarted(false); // Reset to show name input
                     setGame(null); // Clear game state
                     setError(null); // Clear error
-               }} />
+               }}>
+                 <Text style={styles.buttonText}>Start New Game</Text>
+               </Pressable>
            </View>
        );
    }
@@ -470,7 +473,9 @@ export default function HomeScreen() {
           value={playerName}
           onChangeText={setPlayerName}
         />
-        <Button title="Start Game" onPress={startGame} />
+        <Pressable style={styles.button} onPress={startGame}>
+          <Text style={styles.buttonText}>Start Game</Text>
+        </Pressable>
       </View>
     );
   }
@@ -497,7 +502,7 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Choose Suit</Text>
+            <Text style={styles.modalTitle}>Choose a Suit</Text>
             <Text style={styles.modalSubtitle}>Select the suit for your 8:</Text>
             <View style={styles.suitButtonsContainer}>
               {SUITS.map((suit) => (
@@ -512,8 +517,8 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity
-              style={styles.cancelButton}
+            <Pressable 
+              style={styles.cancelButton} 
               onPress={() => {
                 setShowSuitModal(false);
                 setSelectedCard(null);
@@ -521,7 +526,7 @@ export default function HomeScreen() {
               }}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -530,12 +535,14 @@ export default function HomeScreen() {
            <View style={styles.gameOverContainer}>
                <Text style={styles.gameOverText}>{game.winner} wins!</Text>
                <Text style={styles.gameMessage}>{game.message}</Text>
-                <Button title="Start New Game" onPress={() => {
+                <Pressable style={styles.button} onPress={() => {
                     setIsGameStarted(false); // Reset state to show name input
                     setGame(null);
                     setPlayerName('');
                     setError(null); // Clear error
-                }} />
+                }}>
+                  <Text style={styles.buttonText}>Start New Game</Text>
+                </Pressable>
            </View>
       ) : (
            <View style={styles.gameArea}>
@@ -544,7 +551,7 @@ export default function HomeScreen() {
 
 
                {/* App's Hand (Show number of cards) */}
-               <Text style={styles.handTitle}>App's Hand ({game.appHandSize} cards)</Text>
+               <Text style={styles.handTitle}>App&apos;s Hand ({game.appHandSize} cards)</Text>
                {/* In a real game, you wouldn't show the app's cards */}
 
                {/* Discard Pile */}
@@ -558,7 +565,7 @@ export default function HomeScreen() {
                </View>
 
                {/* Player's Hand */}
-               <Text style={styles.handTitle}>{game.playerName}'s Hand ({playerHand.length} cards)</Text>
+               <Text style={styles.handTitle}>{game.playerName}&apos;s Hand ({playerHand.length} cards)</Text>
                <ScrollView horizontal style={styles.handContainer} contentContainerStyle={styles.handContentContainer}>
                    {/* Render each card in the player's hand, making them pressable */}
                    {playerHand.map((card, index) => renderCard(card, index, handlePlayCard))}
@@ -566,17 +573,29 @@ export default function HomeScreen() {
 
                 {/* Actions */}
                <View style={styles.actionsContainer}>
-                    <Button 
-                        title="Draw Card" 
-                        onPress={handleDrawCard} 
-                        disabled={game.gameOver || loading || hasDrawnCard} 
-                    />
+                    <Pressable 
+                        style={({ pressed }) => [
+                            styles.button,
+                            (game.gameOver || loading || hasDrawnCard) && styles.buttonDisabled,
+                            pressed && styles.buttonPressed
+                        ]}
+                        onPress={handleDrawCard}
+                        disabled={game.gameOver || loading || hasDrawnCard}
+                    >
+                        <Text style={styles.buttonText}>Draw Card</Text>
+                    </Pressable>
                     {hasDrawnCard && (
-                        <Button 
-                            title="End Turn" 
-                            onPress={endTurn} 
-                            disabled={game.gameOver || loading} 
-                        />
+                        <Pressable 
+                            style={({ pressed }) => [
+                                styles.button,
+                                (game.gameOver || loading) && styles.buttonDisabled,
+                                pressed && styles.buttonPressed
+                            ]}
+                            onPress={endTurn}
+                            disabled={game.gameOver || loading}
+                        >
+                            <Text style={styles.buttonText}>End Turn</Text>
+                        </Pressable>
                     )}
                </View>
                 {/* Optional: Display Deck Size */}
@@ -594,11 +613,36 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#e0e0e0', // Light grey background
+    backgroundColor: '#e0e0e0',
     alignItems: 'center',
-    // justifyContent: 'center', // Removed to allow content to flow
     padding: 20,
-    paddingTop: 50, // Add some padding at the top
+    paddingTop: 50,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
   title: {
     fontSize: 28,
