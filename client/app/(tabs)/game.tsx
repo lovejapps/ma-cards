@@ -41,6 +41,9 @@ export default function GameScreen() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [localGame, setLocalGame] = useState<LocalGameState | null>(null);
   const [game, setGame] = useState<GameView | null>(null);
+  const [lobbyPlayers, setLobbyPlayers] = useState<{ [id: string]: string }>({});
+  const [myId, setMyId] = useState<string | null>(null);
+  const [hostId, setHostId] = useState<string | null>(null);
   const [status, setStatus] = useState(gameMode === 'singleplayer' ? 'playing' : 'connecting');
   const [suitChoice, setSuitChoice] = useState<{ show: boolean, card: CardType | null }>({ show: false, card: null });
 
@@ -75,16 +78,29 @@ export default function GameScreen() {
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
-        console.log('Connected to server');
         setStatus('waiting');
+        setMyId(newSocket.id || null);
         if (action === 'create') newSocket.emit('createRoom', { playerName });
         else if (action === 'join') newSocket.emit('joinRoom', { playerName, roomId });
       });
 
-      newSocket.on('roomCreated', ({ roomId }) => router.setParams({ roomId }));
+      newSocket.on('roomCreated', ({ roomId, playerId, playerName }) => {
+        router.setParams({ roomId });
+        setHostId(playerId);
+        setLobbyPlayers({ [playerId]: playerName }); // Initialize lobby with host
+      });
+
+      newSocket.on('playerJoined', ({ players, hostId }) => {
+        setLobbyPlayers(players);
+        setHostId(hostId);
+      });
+
+      newSocket.on('gameStart', () => {
+        setStatus('playing');
+      });
+
       newSocket.on('gameState', (gs: ServerGameState) => {
         updateGameStateView(gs);
-        if (gs.players && Object.keys(gs.players).length === 2) setStatus('playing');
       });
       newSocket.on('invalidMove', ({ message }) => showAlert('Invalid Move', message));
       newSocket.on('gameError', ({ message }) => showAlert('Error', message, [{ text: 'OK', onPress: () => router.back() }]));
@@ -163,12 +179,28 @@ export default function GameScreen() {
   if (status === 'waiting') {
     return (
       <View style={styles.center}>
-        <Text style={styles.title}>Waiting for Opponent...</Text>
-        <Text style={styles.infoText}>Share Room ID:</Text>
+        <Text style={styles.title}>Lobby</Text>
+        <Text style={styles.infoText}>Share Room ID to invite players:</Text>
         <View style={styles.roomIdContainer}>
           <Text style={styles.roomIdText}>{roomId}</Text>
           <TouchableOpacity style={styles.copyButton} onPress={handleCopyRoomId}><Text style={styles.buttonText}>Copy</Text></TouchableOpacity>
         </View>
+
+        <Text style={styles.title}>Players:</Text>
+        <View style={styles.playerList}>
+          {Object.values(lobbyPlayers).map((name, index) => (
+            <Text key={index} style={styles.playerName}>{name}</Text>
+          ))}
+        </View>
+
+        {myId === hostId ? (
+          <TouchableOpacity style={styles.startButton} onPress={() => socket?.emit('startGame', { roomId })}>
+            <Text style={styles.buttonText}>Start Game</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.infoText}>Waiting for the host to start the game...</Text>
+        )}
+
         <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
       </View>
     );
@@ -233,6 +265,9 @@ const styles = StyleSheet.create({
   cancelButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#ccc', backgroundColor: '#f8f8f8' },
   headerText: { fontSize: 16, fontWeight: 'bold' },
+  playerList: { marginVertical: 20 },
+  playerName: { fontSize: 18, padding: 5 },
+  startButton: { backgroundColor: '#28a745', padding: 15, borderRadius: 8, alignItems: 'center', width: '80%', marginTop: 20 },
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0' },
   gameArea: { flex: 1, width: '100%' },
   opponentInfo: { padding: 10, alignItems: 'center' },

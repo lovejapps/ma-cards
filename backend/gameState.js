@@ -21,10 +21,8 @@ class GameState {
     }
 
     addPlayer(player) { // player is {id, name}
-        if (Object.keys(this.players).length < 2) {
-            this.players[player.id] = { name: player.name, hand: [] };
-            this.playerIds.push(player.id);
-        }
+        this.players[player.id] = { name: player.name, hand: [] };
+        this.playerIds.push(player.id);
     }
 
     removePlayer(playerId) {

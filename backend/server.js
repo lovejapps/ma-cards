@@ -39,7 +39,8 @@ io.on('connection', (socket) => {
         const gameState = new GameState([{ id: socket.id, name: playerName }]);
         rooms[roomId] = { 
             gameState,
-            players: { [socket.id]: playerName }
+            players: { [socket.id]: playerName },
+            hostId: socket.id
         };
 
         socket.emit('roomCreated', { roomId, playerId: socket.id, playerName });
@@ -48,19 +49,32 @@ io.on('connection', (socket) => {
 
     socket.on('joinRoom', ({ roomId, playerName }) => {
         const room = rooms[roomId];
-        if (room && Object.keys(room.players).length < 2) {
+        if (room && room.gameState.turn === null) {
             socket.join(roomId);
             room.players[socket.id] = playerName;
             room.gameState.addPlayer({ id: socket.id, name: playerName });
 
-            // Start the game
-            room.gameState.startNewGame();
-
-            io.to(roomId).emit('gameStart', { roomId, players: room.players });
-            broadcastGameState(roomId);
             console.log(`Player ${playerName} (${socket.id}) joined room ${roomId}`);
+            // Notify all players in the room about the new player
+            io.to(roomId).emit('playerJoined', { players: room.players, hostId: room.hostId });
         } else {
             socket.emit('gameError', { message: 'Room not found or is full.' });
+        }
+    });
+
+    socket.on('startGame', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room && room.hostId === socket.id) {
+            if (Object.keys(room.players).length >= 2) {
+                room.gameState.startNewGame();
+                io.to(roomId).emit('gameStart', { roomId, players: room.players });
+                broadcastGameState(roomId);
+                console.log(`Game started in room ${roomId} by host ${socket.id}`);
+            } else {
+                socket.emit('gameError', { message: 'Not enough players to start the game.' });
+            }
+        } else {
+            socket.emit('gameError', { message: 'Only the host can start the game.' });
         }
     });
 
