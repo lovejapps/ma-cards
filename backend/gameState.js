@@ -26,11 +26,31 @@ class GameState {
     }
 
     removePlayer(playerId) {
+        const wasTheirTurn = this.turn === playerId;
+        const currentTurnIndex = this.playerIds.indexOf(this.turn);
+        const disconnectedPlayerName = this.players[playerId]?.name || 'A player';
+
         const playerIndex = this.playerIds.indexOf(playerId);
         if (playerIndex > -1) {
             this.playerIds.splice(playerIndex, 1);
         }
         delete this.players[playerId];
+
+        if (this.playerIds.length === 0) {
+            this.gameOver = true;
+            this.winner = null;
+            this.message = "All players have left the game.";
+            return;
+        }
+
+        if (wasTheirTurn) {
+            // The next player is at the same index, or wraps around
+            this.turn = this.playerIds[currentTurnIndex % this.playerIds.length];
+            const nextPlayerName = this.players[this.turn].name;
+            this.message = `${disconnectedPlayerName} has left the game. It is now ${nextPlayerName}'s turn.`;
+        } else {
+            this.message = `${disconnectedPlayerName} has left the game.`;
+        }
     }
 
     endGame() {

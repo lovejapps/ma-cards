@@ -111,9 +111,9 @@ io.on('connection', (socket) => {
             const room = rooms[roomId];
             const playerName = room.players[socket.id];
             
-            // Clean up player from room and game state
-            room.gameState.removePlayer(socket.id);
+            // Remove player from room's player list and game state
             delete room.players[socket.id];
+            room.gameState.removePlayer(socket.id);
 
             console.log(`Player ${playerName} (${socket.id}) left room ${roomId}`);
 
@@ -121,11 +121,26 @@ io.on('connection', (socket) => {
             if (Object.keys(room.players).length === 0) {
                 delete rooms[roomId];
                 console.log(`Room ${roomId} is empty and has been closed.`);
-            } else {
-                // If there are players left, notify them and end the game
-                room.gameState.endGame(); // Mark game as over
-                io.to(roomId).emit('opponentDisconnected', 'Your opponent has disconnected. The game has ended.');
-                // No need to broadcast state if the game is over and the client will handle the disconnect UI
+                return;
+            }
+
+            // If the host disconnects before the game starts, assign a new host
+            if (room.hostId === socket.id && room.gameState.turn === null) {
+                room.hostId = Object.keys(room.players)[0]; // Assign new host
+            }
+
+            // If game hasn't started, just update the lobby
+            if (room.gameState.turn === null) {
+                io.to(roomId).emit('playerJoined', { players: room.players, hostId: room.hostId });
+            }
+            // If game is active and there are enough players, continue
+            else if (Object.keys(room.players).length >= 2) {
+                broadcastGameState(roomId);
+            }
+            // Otherwise, not enough players to continue, end the game
+            else {
+                room.gameState.endGame();
+                io.to(roomId).emit('opponentDisconnected', 'The last opponent has disconnected. The game has ended.');
             }
         }
     });

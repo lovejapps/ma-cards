@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
-import { Card as CardComponent } from '../../components/Card';
-import { GameState as ServerGameState, Card as CardType, Suit } from '../../types';
-import { GameState as LocalGameState } from '../../logic/gameState';
+import { Card as CardComponent } from '@/components/Card';
+import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
+import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
 
 const WEBSOCKET_URL = 'http://localhost:3000';
@@ -68,49 +68,62 @@ export default function GameScreen() {
     }
   }, []);
 
+  // Effect for single player mode
   useEffect(() => {
     if (gameMode === 'singleplayer') {
       const newLocalGame = new LocalGameState([playerName as string]);
       setLocalGame(newLocalGame);
       updateGameStateView(newLocalGame, 'player1');
-    } else {
-      const newSocket = io(WEBSOCKET_URL);
-      setSocket(newSocket);
-
-      newSocket.on('connect', () => {
-        setStatus('waiting');
-        setMyId(newSocket.id || null);
-        if (action === 'create') newSocket.emit('createRoom', { playerName });
-        else if (action === 'join') newSocket.emit('joinRoom', { playerName, roomId });
-      });
-
-      newSocket.on('roomCreated', ({ roomId, playerId, playerName }) => {
-        router.setParams({ roomId });
-        setHostId(playerId);
-        setLobbyPlayers({ [playerId]: playerName }); // Initialize lobby with host
-      });
-
-      newSocket.on('playerJoined', ({ players, hostId }) => {
-        setLobbyPlayers(players);
-        setHostId(hostId);
-      });
-
-      newSocket.on('gameStart', () => {
-        setStatus('playing');
-      });
-
-      newSocket.on('gameState', (gs: ServerGameState) => {
-        updateGameStateView(gs);
-      });
-      newSocket.on('invalidMove', ({ message }) => showAlert('Invalid Move', message));
-      newSocket.on('gameError', ({ message }) => showAlert('Error', message, [{ text: 'OK', onPress: () => router.back() }]));
-      newSocket.on('opponentDisconnected', (message) => showAlert('Opponent Left', message, [{ text: 'OK', onPress: () => router.back() }]));
-      newSocket.on('disconnect', () => setStatus('connecting'));
-
-      return () => newSocket.disconnect();
     }
-    return () => {}; // Add an empty cleanup function for the single-player case
-  }, [gameMode, playerName, action, updateGameStateView]);
+  }, [gameMode, playerName, updateGameStateView]);
+
+  // Effect for WebSocket connection and event listeners
+  useEffect(() => {
+    if (gameMode !== 'multiplayer') return;
+
+    const newSocket = io(WEBSOCKET_URL);
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      setStatus('waiting');
+      setMyId(newSocket.id || null);
+    });
+
+    newSocket.on('roomCreated', ({ roomId, playerId, playerName }) => {
+      router.setParams({ roomId });
+      setHostId(playerId);
+      setLobbyPlayers({ [playerId]: playerName });
+    });
+
+    newSocket.on('playerJoined', ({ players, hostId }) => {
+      setLobbyPlayers(players);
+      setHostId(hostId);
+    });
+
+    newSocket.on('gameStart', () => setStatus('playing'));
+    newSocket.on('gameState', (gs: ServerGameState) => updateGameStateView(gs));
+    newSocket.on('invalidMove', ({ message }) => showAlert('Invalid Move', message));
+    newSocket.on('gameError', ({ message }) => showAlert('Error', message, [{ text: 'OK', onPress: () => router.back() }]));
+    newSocket.on('opponentDisconnected', (message) => showAlert('Opponent Left', message, [{ text: 'OK', onPress: () => router.back() }]));
+    newSocket.on('disconnect', () => setStatus('connecting'));
+
+    // Cleanup function
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [gameMode, router, updateGameStateView]);
+
+  // Effect to create or join a room once connected
+  useEffect(() => {
+    if (gameMode === 'multiplayer' && socket && myId) {
+      const pRoomId = Array.isArray(roomId) ? roomId[0] : roomId;
+      if (action === 'create' && !pRoomId) {
+        socket.emit('createRoom', { playerName });
+      } else if (action === 'join' && pRoomId) {
+        socket.emit('joinRoom', { playerName, roomId: pRoomId });
+      }
+    }
+  }, [gameMode, socket, myId, action, roomId, playerName]);
 
   useEffect(() => {
     if (game?.gameOver) {
