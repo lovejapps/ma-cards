@@ -1,17 +1,24 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Card as CardType } from '../types';
+import { Card as CardType, Suit } from '../types';
 
 interface CardProps {
   card: CardType;
 }
+
+const suitSymbols: Record<Suit, string> = {
+  Hearts: '♥',
+  Diamonds: '♦',
+  Clubs: '♣',
+  Spades: '♠',
+};
 
 export function Card({ card }: CardProps) {
   const suitColor = card.suit === 'Hearts' || card.suit === 'Diamonds' ? 'red' : 'black';
   return (
     <View style={styles.card}>
       <Text style={[styles.cardRank, { color: suitColor }]}>{card.rank}</Text>
-      <Text style={[styles.cardSuit, { color: suitColor }]}>{card.suit}</Text>
+      <Text style={[styles.cardSuit, { color: suitColor }]}>{suitSymbols[card.suit]}</Text>
     </View>
   );
 }
@@ -36,6 +43,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   cardSuit: {
-    fontSize: 16,
+    fontSize: 24,
   },
 });

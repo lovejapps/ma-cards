@@ -111,7 +111,8 @@ export default function GameScreen() {
     return () => {
       newSocket.disconnect();
     };
-  }, [gameMode, router, updateGameStateView]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameMode]);
 
   // Effect to create or join a room once connected
   useEffect(() => {
