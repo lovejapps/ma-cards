@@ -19,6 +19,7 @@ class GameState {
         this.message = "";
         this.turn = null;
         this.playerHasDrawn = false;
+
     }
 
     addPlayer(player) { // player is {id, name}
@@ -168,9 +169,14 @@ class GameState {
             return { success: true };
         }
 
-        // If a King is played, the player goes again.
+        // Handle special card rules for turn progression
         if (playedCard.rank === 'K') {
             this.message += ` You played a King, go again!`;
+            // Turn does not change
+        } else if (playedCard.rank === '7') {
+            const playerName = this.players[playerId].name;
+            this.message = `${playerName} played a 7.`;
+            this.skipNextPlayer();
         } else {
             this.nextTurn();
         }
@@ -213,9 +219,8 @@ class GameState {
         if (this.turn !== playerId) {
             return { success: false, message: "It's not your turn." };
         }
-        // A player can only pass after drawing a card.
         if (!this.playerHasDrawn) {
-            return { success: false, message: "You must draw a card before you can pass." };
+            return { success: false, message: "You must draw a card before passing." };
         }
         this.message = `${this.players[playerId].name} passed their turn.`;
         this.nextTurn();
@@ -227,6 +232,20 @@ class GameState {
         const nextIndex = (currentIndex + 1) % this.playerIds.length;
         this.turn = this.playerIds[nextIndex];
         this.playerHasDrawn = false; // Reset for the next player
+        const nextPlayerName = this.players[this.turn].name;
+        this.message += ` It's now ${nextPlayerName}'s turn.`;
+    }
+
+    skipNextPlayer() {
+        const currentIndex = this.playerIds.indexOf(this.turn);
+        const skippedPlayerIndex = (currentIndex + 1) % this.playerIds.length;
+        const nextPlayerIndex = (currentIndex + 2) % this.playerIds.length;
+
+        const skippedPlayerName = this.players[this.playerIds[skippedPlayerIndex]].name;
+        this.message += ` ${skippedPlayerName} is skipped!`;
+
+        this.turn = this.playerIds[nextPlayerIndex];
+        this.playerHasDrawn = false; // Reset for the new player
         const nextPlayerName = this.players[this.turn].name;
         this.message += ` It's now ${nextPlayerName}'s turn.`;
     }

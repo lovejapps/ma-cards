@@ -98,9 +98,13 @@ export class GameState {
       return { success: true, message: '' };
     }
 
-    // If a King is played, the player goes again.
+    // Handle special card rules for turn progression
     if (cardInHand.rank === 'King') {
       this.message += ` You played a King, go again!`;
+    } else if (cardInHand.rank === '7') {
+      const playerName = this.players[this.turn].name;
+      this.message = `${playerName} played a 7.`;
+      this.skipNextPlayer();
     } else {
       this.nextTurn();
     }
@@ -147,7 +151,28 @@ export class GameState {
   nextTurn() {
     this.turn = (this.turn + 1) % this.players.length;
     this.playerHasDrawn = false;
-    this.message = `${this.players[this.turn].name}'s turn`;
+    const nextPlayerName = this.players[this.turn].name;
+    this.message += ` It's now ${nextPlayerName}'s turn.`;
+    if (this.players[this.turn].isComputer) {
+      setTimeout(() => this.computerTurn(), 1000);
+    }
+  }
+
+  skipNextPlayer() {
+    const skippedPlayerIndex = (this.turn + 1) % this.players.length;
+    const nextPlayerIndex = (this.turn + 2) % this.players.length;
+
+    const skippedPlayerName = this.players[skippedPlayerIndex].name;
+    this.message += ` ${skippedPlayerName} is skipped!`;
+
+    this.turn = nextPlayerIndex;
+    this.playerHasDrawn = false;
+    const nextPlayerName = this.players[this.turn].name;
+    this.message += ` It's now ${nextPlayerName}'s turn.`;
+
+    if (this.players[this.turn].isComputer) {
+      setTimeout(() => this.computerTurn(), 1000);
+    }
   }
 
   computerTurn() {
@@ -168,40 +193,40 @@ export class GameState {
       const playableCards = player.hand.filter(card => this.isValidPlay(card));
 
       if (playableCards.length > 0) {
-        // Strategy: Prioritize non-special cards, then Kings if another play is possible, then other special cards.
-        let cardToPlay = playableCards.find(c => !['8', 'Joker', 'King'].includes(c.rank));
+        // Strategy: Prioritize non-special cards, then strategic special cards.
+        let cardToPlay = playableCards.find(c => !['8', 'Joker', 'King', '7'].includes(c.rank));
 
         if (!cardToPlay) {
+          // King strategy
           const kingCard = playableCards.find(c => c.rank === 'King');
-          if (kingCard && playableCards.length > 1) { // Check if there's another card to play after the King
+          if (kingCard && playableCards.length > 1) {
             cardToPlay = kingCard;
           } else {
-            cardToPlay = playableCards[0]; // Fallback to any special card
+            // 7 strategy (play it if it's not just a throwaway)
+            const sevenCard = playableCards.find(c => c.rank === '7');
+            if (sevenCard && player.hand.length > 1) {
+                cardToPlay = sevenCard;
+            } else {
+                cardToPlay = playableCards[0]; // Fallback to any special card
+            }
           }
         }
 
         const chosenSuit = cardToPlay.rank === '8' ? chooseSuitFor8() : undefined;
         const result = this.playCard(player.id, cardToPlay, chosenSuit);
 
-        // If a King was played successfully, the AI gets to go again immediately.
         if (result.success && cardToPlay.rank === 'King') {
-          // Use a small delay to make the AI's second move visible
           setTimeout(() => takeTurn(), 500);
-        } // Otherwise, the turn has already passed or the game ended.
-
+        }
       } else {
-        // Can't play, so must draw.
         this.drawCard(player.id);
         const drawnCard = player.hand[player.hand.length - 1];
-
-        // Check if the drawn card can be played.
         if (this.isValidPlay(drawnCard)) {
           setTimeout(() => {
             const chosenSuit = drawnCard.rank === '8' ? chooseSuitFor8() : undefined;
             this.playCard(player.id, drawnCard, chosenSuit);
           }, 500);
         } else {
-          // Can't play the drawn card, so pass.
           this.passTurn(player.id);
         }
       }
