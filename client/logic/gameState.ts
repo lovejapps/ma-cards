@@ -105,6 +105,24 @@ export class GameState {
       const playerName = this.players[this.turn].name;
       this.message = `${playerName} played a 7.`;
       this.skipNextPlayer();
+    } else if (cardInHand.rank === 'Jack') {
+        const playerName = this.players[this.turn].name;
+        this.message = `${playerName} played a Jack.`;
+        if (this.players.length === 2) {
+            // With 2 players, J acts like a K
+            this.message += ` Go again!`;
+        } else {
+            // With >2 players, turn goes to the previous player
+            const currentIndex = this.turn;
+            const nextIndex = (currentIndex - 1 + this.players.length) % this.players.length;
+            this.turn = nextIndex;
+            this.playerHasDrawn = false;
+            const nextPlayerName = this.players[this.turn].name;
+            this.message += ` It's now ${nextPlayerName}'s turn.`;
+            if (this.players[this.turn].isComputer) {
+                setTimeout(() => this.computerTurn(), 1000);
+            }
+        }
     } else {
       this.nextTurn();
     }
@@ -194,20 +212,26 @@ export class GameState {
 
       if (playableCards.length > 0) {
         // Strategy: Prioritize non-special cards, then strategic special cards.
-        let cardToPlay = playableCards.find(c => !['8', 'Joker', 'King', '7'].includes(c.rank));
+        let cardToPlay = playableCards.find(c => !['8', 'Joker', 'King', '7', 'Jack'].includes(c.rank));
 
         if (!cardToPlay) {
-          // King strategy
-          const kingCard = playableCards.find(c => c.rank === 'King');
-          if (kingCard && playableCards.length > 1) {
-            cardToPlay = kingCard;
+          // King/Jack (2-player) strategy
+          const goAgainCard = playableCards.find(c => c.rank === 'King' || (c.rank === 'Jack' && this.players.length === 2));
+          if (goAgainCard && playableCards.length > 1) {
+            cardToPlay = goAgainCard;
           } else {
-            // 7 strategy (play it if it's not just a throwaway)
+            // 7 strategy
             const sevenCard = playableCards.find(c => c.rank === '7');
             if (sevenCard && player.hand.length > 1) {
                 cardToPlay = sevenCard;
             } else {
-                cardToPlay = playableCards[0]; // Fallback to any special card
+                // Jack (>2 player) strategy
+                const jackCard = playableCards.find(c => c.rank === 'Jack');
+                if (jackCard) {
+                    cardToPlay = jackCard;
+                } else {
+                    cardToPlay = playableCards[0]; // Fallback to any special card
+                }
             }
           }
         }
@@ -215,7 +239,8 @@ export class GameState {
         const chosenSuit = cardToPlay.rank === '8' ? chooseSuitFor8() : undefined;
         const result = this.playCard(player.id, cardToPlay, chosenSuit);
 
-        if (result.success && cardToPlay.rank === 'King') {
+        // If a go-again card was played successfully, the AI gets to go again immediately.
+        if (result.success && (cardToPlay.rank === 'King' || (cardToPlay.rank === 'Jack' && this.players.length === 2))) {
           setTimeout(() => takeTurn(), 500);
         }
       } else {

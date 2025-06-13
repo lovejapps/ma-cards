@@ -28,8 +28,14 @@
 - UI requirement: Card designs should show icons (suit/symbol), not just text.
 - New requirement: Add a red and black joker to the deck and display them with appropriate icons/colors.
 - New rule: Joker can be played on any card, and any card can be played on a Joker.
-- New requirement: Add a "pass turn" option—after drawing, player must explicitly pass to end their turn; do not auto-advance.
 - New rule: If a player plays K, they must immediately play another card if possible, or else draw another card before passing turn.
+- New rule: If a player plays 7, the next player's turn is skipped (no stacking unless specified otherwise).
+- The Seven (7) skip rule is now implemented as a simple skip (no stacking/challenge logic).
+- New rule: If a player plays K, they must immediately play another card if possible, or else draw another card before passing turn.
+- [x] King (K) rule is now working as intended.
+- [x] Correct Seven (7) skip rule: 7 skips next player (no stacking).
+- New rule: Jack (J) rule—if 2 players, acts like King (play again); if >2, skips every other player, up to the player just before the one who played the Jack.
+- [x] Jack (J) rule is now implemented and working as intended.
 
 ## Task List
 - [x] Integrate socket.io-client into the frontend project.
@@ -61,6 +67,8 @@
 - [x] Add red and black joker cards to the deck and display logic.
 - [x] Implement "pass turn" option: after drawing, player must click pass to end turn (do not auto-advance).
 - [x] Implement King (K) rule: after playing K, player must play again or draw before passing turn.
+- [x] Correct Seven (7) skip rule: 7 skips next player (no stacking).
+- [x] Implement Jack (J) rule: 2p acts like King; >2p skips every other player.
 
 ## Current Goal
 Open for next feature or polish.

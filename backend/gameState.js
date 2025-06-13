@@ -177,6 +177,21 @@ class GameState {
             const playerName = this.players[playerId].name;
             this.message = `${playerName} played a 7.`;
             this.skipNextPlayer();
+        } else if (playedCard.rank === 'Jack') {
+            const playerName = this.players[playerId].name;
+            this.message = `${playerName} played a Jack.`;
+            if (this.playerIds.length === 2) {
+                // With 2 players, J acts like a K
+                this.message += ` Go again!`;
+            } else {
+                // With >2 players, turn goes to the previous player
+                const currentIndex = this.playerIds.indexOf(this.turn);
+                const nextIndex = (currentIndex - 1 + this.playerIds.length) % this.playerIds.length;
+                this.turn = this.playerIds[nextIndex];
+                this.playerHasDrawn = false;
+                const nextPlayerName = this.players[this.turn].name;
+                this.message += ` It's now ${nextPlayerName}'s turn.`;
+            }
         } else {
             this.nextTurn();
         }
