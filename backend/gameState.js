@@ -109,6 +109,12 @@ class GameState {
         const topCard = this.getTopCard();
         if (!topCard) return true; // Should only happen if discard pile is empty
 
+        // Jokers can be played on any card, and any card can be played on a Joker
+        if (cardToPlay.rank === 'Joker' || topCard.rank === 'Joker') {
+            return true;
+        }
+
+        // Standard rules
         return cardToPlay.rank === '8' || cardToPlay.rank === topCard.rank || cardToPlay.suit === this.currentSuit;
     }
 
@@ -136,7 +142,10 @@ class GameState {
 
         const playerName = this.players[playerId].name;
         // Handle special card logic (e.g., for '8')
-        if (playedCard.rank === '8') {
+        if (playedCard.rank === 'Joker') {
+            this.currentSuit = playedCard.suit; // The 'suit' of the joker (for color)
+            this.message = `${playerName} played a Joker.`;
+        } else if (playedCard.rank === '8') {
             if (!chosenSuit || !SUITS.includes(chosenSuit)) {
                 // This case should ideally be prevented by the client, but as a fallback:
                 player.hand.splice(cardIndex, 0, playedCard); // return card to hand

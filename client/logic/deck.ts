@@ -10,11 +10,15 @@ export class Deck {
 
   initialize() {
     this.cards = [];
+    const standardRanks = RANKS.filter(r => r !== 'Joker');
     for (const suit of SUITS) {
-      for (const rank of RANKS) {
+      for (const rank of standardRanks) {
         this.cards.push(new Card(suit, rank));
       }
     }
+    // Add two jokers
+    this.cards.push(new Card('Hearts', 'Joker')); // Red Joker
+    this.cards.push(new Card('Spades', 'Joker')); // Black Joker
   }
 
   shuffle() {

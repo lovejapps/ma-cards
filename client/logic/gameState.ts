@@ -42,6 +42,19 @@ export class GameState {
     return this.discardPile.length > 0 ? this.discardPile[this.discardPile.length - 1] : null;
   }
 
+  isValidPlay(card: Card): boolean {
+    const topCard = this.getTopCard();
+    if (!topCard) {
+      return true;
+    }
+    // Jokers can be played on any card, and any card can be played on a Joker
+    if (card.rank === 'Joker' || topCard.rank === 'Joker') {
+      return true;
+    }
+    // Standard rules
+    return card.rank === '8' || card.rank === topCard.rank || card.suit === (this.currentSuit || topCard.suit);
+  }
+
   playCard(playerId: string, card: Card, chosenSuit?: Suit): { success: boolean, message: string } {
     const playerIndex = this.players.findIndex(p => p.id === playerId);
     if (playerIndex !== this.turn) return { success: false, message: "It's not your turn." };
@@ -50,14 +63,28 @@ export class GameState {
     const cardInHand = player.hand.find(c => c.rank === card.rank && c.suit === card.suit);
     if (!cardInHand) return { success: false, message: 'Card not in hand.' };
 
-    const topCard = this.getTopCard();
-    if (topCard && card.rank !== '8' && card.rank !== topCard.rank && card.suit !== (this.currentSuit || topCard.suit)) {
+    if (!this.isValidPlay(cardInHand)) {
       return { success: false, message: 'Invalid card.' };
     }
 
     player.hand = player.hand.filter(c => !(c.rank === card.rank && c.suit === card.suit));
     this.discardPile.push(cardInHand);
-    this.currentSuit = card.rank === '8' ? chosenSuit || null : null;
+    
+    const playerName = player.name;
+
+    if (cardInHand.rank === 'Joker') {
+      this.currentSuit = cardInHand.suit;
+      this.message = `${playerName} played a Joker.`;
+    } else if (cardInHand.rank === '8') {
+      if (!chosenSuit) {
+        return { success: false, message: 'You must choose a suit when playing an 8.' };
+      }
+      this.currentSuit = chosenSuit;
+      this.message = `${playerName} played an 8 and chose ${this.currentSuit}.`;
+    } else {
+      this.currentSuit = cardInHand.suit;
+      this.message = `${playerName} played ${cardInHand.toString()}.`;
+    }
 
     if (player.hand.length === 0) {
       this.gameOver = true;
@@ -96,22 +123,27 @@ export class GameState {
 
   computerTurn() {
     const player = this.players[this.turn];
-    const topCard = this.getTopCard();
-    if (!topCard) return;
+    if (!player || !player.isComputer) return;
 
-    const playableCards = player.hand.filter(card => 
-        card.rank === '8' || card.rank === topCard.rank || card.suit === (this.currentSuit || topCard.suit)
-    );
+    const playableCards = player.hand.filter(card => this.isValidPlay(card));
 
     if (playableCards.length > 0) {
-      const cardToPlay = playableCards[0];
+      // Basic strategy: play a non-special card if possible, otherwise play a special card.
+      let cardToPlay = playableCards.find(c => c.rank !== '8' && c.rank !== 'Joker');
+      if (!cardToPlay) {
+        cardToPlay = playableCards[0]; // Play the first available special card
+      }
+
       let chosenSuit: Suit | undefined = undefined;
       if (cardToPlay.rank === '8') {
-        const suitCounts = player.hand.reduce((acc, c) => { 
-            if(c.rank !== '8') acc[c.suit] = (acc[c.suit] || 0) + 1; 
-            return acc; 
+        // Find the most common suit in hand to choose
+        const suitCounts = player.hand.reduce((acc, c) => {
+          if (c.rank !== '8') { // Don't count the 8 itself
+            acc[c.suit] = (acc[c.suit] || 0) + 1;
+          }
+          return acc;
         }, {} as Record<Suit, number>);
-        chosenSuit = (Object.keys(suitCounts).sort((a,b) => suitCounts[b as Suit] - suitCounts[a as Suit])[0] || 'Spades') as Suit;
+        chosenSuit = (Object.keys(suitCounts).sort((a, b) => suitCounts[b as Suit] - suitCounts[a as Suit])[0] || 'Spades') as Suit;
       }
       this.playCard(player.id, cardToPlay, chosenSuit);
     } else {

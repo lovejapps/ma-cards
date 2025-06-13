@@ -17,8 +17,14 @@ export function Card({ card }: CardProps) {
   const suitColor = card.suit === 'Hearts' || card.suit === 'Diamonds' ? 'red' : 'black';
   return (
     <View style={styles.card}>
-      <Text style={[styles.cardRank, { color: suitColor }]}>{card.rank}</Text>
-      <Text style={[styles.cardSuit, { color: suitColor }]}>{suitSymbols[card.suit]}</Text>
+      {card.rank === 'Joker' ? (
+        <Text style={[styles.jokerText, { color: suitColor }]}>JOKER</Text>
+      ) : (
+        <>
+          <Text style={[styles.cardRank, { color: suitColor }]}>{card.rank}</Text>
+          <Text style={[styles.cardSuit, { color: suitColor }]}>{suitSymbols[card.suit]}</Text>
+        </>
+      )}
     </View>
   );
 }
@@ -44,5 +50,10 @@ const styles = StyleSheet.create({
   },
   cardSuit: {
     fontSize: 24,
+  },
+  jokerText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });

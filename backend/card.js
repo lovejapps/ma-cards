@@ -1,6 +1,6 @@
 // backend/card.js
 const SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
-const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'];
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace', 'Joker'];
 
 class Card {
     constructor(suit, rank) {

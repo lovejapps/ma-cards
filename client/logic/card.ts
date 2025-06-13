@@ -1,8 +1,8 @@
 export type Suit = 'Hearts' | 'Diamonds' | 'Clubs' | 'Spades';
-export type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'Jack' | 'Queen' | 'King' | 'Ace';
+export type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'Jack' | 'Queen' | 'King' | 'Ace' | 'Joker';
 
 export const SUITS: Suit[] = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
-export const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'];
+export const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace', 'Joker'];
 
 export class Card {
   suit: Suit;
