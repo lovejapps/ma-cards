@@ -102,6 +102,18 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('passTurn', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const result = room.gameState.passTurn(socket.id);
+            if (result.success) {
+                broadcastGameState(roomId);
+            } else {
+                socket.emit('invalidMove', { message: result.message });
+            }
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log(`Player disconnected: ${socket.id}`);
         // Find which room the player was in

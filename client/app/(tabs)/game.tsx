@@ -31,6 +31,7 @@ interface GameView {
   winner: string | null;
   message: string;
   myId: string;
+  playerHasDrawn: boolean;
 }
 
 export default function GameScreen() {
@@ -180,6 +181,19 @@ export default function GameScreen() {
     }
   };
 
+  const handlePassTurn = () => {
+    if (gameMode === 'singleplayer' && localGame) {
+      const result = localGame.passTurn('player1');
+      if (result.success) {
+        updateGameStateView(localGame, 'player1');
+      } else {
+        showAlert('Invalid Move', result.message);
+      }
+    } else {
+      socket?.emit('passTurn', { roomId });
+    }
+  };
+
   const handleCopyRoomId = () => {
     if (roomId) {
       const id = roomId as string;
@@ -247,7 +261,18 @@ export default function GameScreen() {
           {game.opponents.map(op => <Text key={op.id}>{op.name}: {op.handSize} cards</Text>)}
         </View>
         <View style={styles.deckArea}>
-          <TouchableOpacity onPress={handleDrawCard} disabled={game.turn !== game.myId}><View style={styles.cardBack} /></TouchableOpacity>
+          <View style={styles.actionButtons}>
+            {!game?.playerHasDrawn ? (
+              <TouchableOpacity onPress={handleDrawCard} disabled={game.turn !== game.myId} style={styles.actionButton}>
+                <View style={styles.cardBack} />
+                <Text style={styles.actionButtonText}>Draw Card</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={handlePassTurn} disabled={game.turn !== game.myId} style={styles.passButton}>
+                <Text style={styles.buttonText}>Pass Turn</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           {game.topCard && <CardComponent card={game.topCard} />}
           {game.currentSuit && <Text>Suit: {game.currentSuit}</Text>}
         </View>
@@ -292,4 +317,8 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10, alignItems: 'center' },
   suitChoice: { padding: 10, fontSize: 18 },
   statusMessage: { textAlign: 'center', fontSize: 18, fontWeight: 'bold', marginVertical: 10 },
+  actionButtons: { alignItems: 'center' },
+  actionButton: { alignItems: 'center' },
+  actionButtonText: { marginTop: 5, fontSize: 16 },
+  passButton: { backgroundColor: '#ffc107', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 8, height: 100, justifyContent: 'center' },
 });

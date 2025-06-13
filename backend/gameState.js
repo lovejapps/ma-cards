@@ -18,6 +18,7 @@ class GameState {
         this.winner = null;
         this.message = "";
         this.turn = null;
+        this.playerHasDrawn = false;
     }
 
     addPlayer(player) { // player is {id, name}
@@ -59,6 +60,7 @@ class GameState {
     }
 
     startNewGame() {
+        this.playerHasDrawn = false;
         if (this.playerIds.length < 2) {
             this.message = "Not enough players to start the game.";
             return;
@@ -172,6 +174,10 @@ class GameState {
             return { success: false, message: "It's not your turn to draw." };
         }
 
+        if (this.playerHasDrawn) {
+            return { success: false, message: "You have already drawn a card this turn." };
+        }
+
         if (this.deck.cards.length === 0) {
             if (this.discardPile.length <= 1) {
                 this.message = "No cards left to draw. The game is a draw.";
@@ -189,8 +195,20 @@ class GameState {
 
         const drawnCard = this.deck.deal(1)[0];
         this.players[playerId].hand.push(drawnCard);
+        this.playerHasDrawn = true;
         this.message = `${this.players[playerId].name} drew a card.`;
-        // The player who draws can end their turn, they don't get to play the card immediately.
+        return { success: true };
+    }
+
+    passTurn(playerId) {
+        if (this.turn !== playerId) {
+            return { success: false, message: "It's not your turn." };
+        }
+        // A player can only pass after drawing a card.
+        if (!this.playerHasDrawn) {
+            return { success: false, message: "You must draw a card before you can pass." };
+        }
+        this.message = `${this.players[playerId].name} passed their turn.`;
         this.nextTurn();
         return { success: true };
     }
@@ -199,6 +217,7 @@ class GameState {
         const currentIndex = this.playerIds.indexOf(this.turn);
         const nextIndex = (currentIndex + 1) % this.playerIds.length;
         this.turn = this.playerIds[nextIndex];
+        this.playerHasDrawn = false; // Reset for the next player
         const nextPlayerName = this.players[this.turn].name;
         this.message += ` It's now ${nextPlayerName}'s turn.`;
     }
@@ -234,7 +253,8 @@ class GameState {
             winnerName: winnerName,
             message: this.message,
             myId: playerId,
-            players: this.players
+            players: this.players,
+            playerHasDrawn: this.playerHasDrawn && this.turn === playerId
         };
     }
 }

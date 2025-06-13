@@ -17,6 +17,7 @@ export class GameState {
   winner: string | null = null;
   message: string = '';
   currentSuit: Suit | null = null;
+  playerHasDrawn: boolean = false;
 
   constructor(playerNames: string[]) {
     this.deck = new Deck();
@@ -36,6 +37,7 @@ export class GameState {
     this.gameOver = false;
     this.winner = null;
     this.message = `${this.players[0].name}'s turn`;
+    this.playerHasDrawn = false;
   }
 
   getTopCard(): Card | null {
@@ -101,6 +103,10 @@ export class GameState {
     const playerIndex = this.players.findIndex(p => p.id === playerId);
     if (playerIndex !== this.turn) return { success: false, message: "It's not your turn." };
 
+    if (this.playerHasDrawn) {
+      return { success: false, message: 'You have already drawn a card.' };
+    }
+
     if (this.deck.isEmpty()) {
         this.deck.cards = this.discardPile.slice(0, -1);
         this.deck.shuffle();
@@ -112,12 +118,26 @@ export class GameState {
     }
 
     this.players[playerIndex].hand.push(...this.deck.deal(1));
+    this.playerHasDrawn = true;
+    this.message = `${this.players[playerIndex].name} drew a card. You can now play a card or pass.`;
+    return { success: true, message: '' };
+  }
+
+  passTurn(playerId: string): { success: boolean, message: string } {
+    const playerIndex = this.players.findIndex(p => p.id === playerId);
+    if (playerIndex !== this.turn) {
+      return { success: false, message: "It's not your turn." };
+    }
+    if (!this.playerHasDrawn) {
+      return { success: false, message: 'You must draw a card before passing.' };
+    }
     this.nextTurn();
     return { success: true, message: '' };
   }
 
   nextTurn() {
     this.turn = (this.turn + 1) % this.players.length;
+    this.playerHasDrawn = false;
     this.message = `${this.players[this.turn].name}'s turn`;
   }
 
@@ -147,7 +167,17 @@ export class GameState {
       }
       this.playCard(player.id, cardToPlay, chosenSuit);
     } else {
+      // Draw a card
       this.drawCard(player.id);
+      // Now check if the newly drawn card is playable
+      const lastDrawnCard = player.hand[player.hand.length - 1];
+      if (this.isValidPlay(lastDrawnCard)) {
+        // If it's playable, play it
+        this.playCard(player.id, lastDrawnCard, lastDrawnCard.rank === '8' ? 'Spades' : undefined);
+      } else {
+        // If not, pass the turn
+        this.passTurn(player.id);
+      }
     }
   }
 
@@ -165,6 +195,7 @@ export class GameState {
       winner: this.winner ? this.players.find(p => p.id === this.winner)?.name : null,
       message: this.message,
       myId: playerId,
+      playerHasDrawn: this.playerHasDrawn && this.players[this.turn].id === playerId,
     };
   }
 }
