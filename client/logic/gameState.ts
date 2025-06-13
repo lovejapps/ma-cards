@@ -88,6 +88,9 @@ export class GameState {
       this.message = `${playerName} played ${cardInHand.toString()}.`;
     }
 
+    // After any successful play, reset the has-drawn flag for the turn.
+    this.playerHasDrawn = false;
+
     if (player.hand.length === 0) {
       this.gameOver = true;
       this.winner = player.id;
@@ -95,7 +98,13 @@ export class GameState {
       return { success: true, message: '' };
     }
 
-    this.nextTurn();
+    // If a King is played, the player goes again.
+    if (cardInHand.rank === 'King') {
+      this.message += ` You played a King, go again!`;
+    } else {
+      this.nextTurn();
+    }
+
     return { success: true, message: '' };
   }
 
@@ -145,40 +154,60 @@ export class GameState {
     const player = this.players[this.turn];
     if (!player || !player.isComputer) return;
 
-    const playableCards = player.hand.filter(card => this.isValidPlay(card));
+    // Helper function to find the best suit to choose for an 8
+    const chooseSuitFor8 = () => {
+      const suitCounts = player.hand.reduce((acc, c) => {
+        if (c.rank !== '8') { acc[c.suit] = (acc[c.suit] || 0) + 1; }
+        return acc;
+      }, {} as Record<Suit, number>);
+      return (Object.keys(suitCounts).sort((a, b) => suitCounts[b as Suit] - suitCounts[a as Suit])[0] || 'Spades') as Suit;
+    };
 
-    if (playableCards.length > 0) {
-      // Basic strategy: play a non-special card if possible, otherwise play a special card.
-      let cardToPlay = playableCards.find(c => c.rank !== '8' && c.rank !== 'Joker');
-      if (!cardToPlay) {
-        cardToPlay = playableCards[0]; // Play the first available special card
-      }
+    // Main AI logic loop
+    const takeTurn = () => {
+      const playableCards = player.hand.filter(card => this.isValidPlay(card));
 
-      let chosenSuit: Suit | undefined = undefined;
-      if (cardToPlay.rank === '8') {
-        // Find the most common suit in hand to choose
-        const suitCounts = player.hand.reduce((acc, c) => {
-          if (c.rank !== '8') { // Don't count the 8 itself
-            acc[c.suit] = (acc[c.suit] || 0) + 1;
+      if (playableCards.length > 0) {
+        // Strategy: Prioritize non-special cards, then Kings if another play is possible, then other special cards.
+        let cardToPlay = playableCards.find(c => !['8', 'Joker', 'King'].includes(c.rank));
+
+        if (!cardToPlay) {
+          const kingCard = playableCards.find(c => c.rank === 'King');
+          if (kingCard && playableCards.length > 1) { // Check if there's another card to play after the King
+            cardToPlay = kingCard;
+          } else {
+            cardToPlay = playableCards[0]; // Fallback to any special card
           }
-          return acc;
-        }, {} as Record<Suit, number>);
-        chosenSuit = (Object.keys(suitCounts).sort((a, b) => suitCounts[b as Suit] - suitCounts[a as Suit])[0] || 'Spades') as Suit;
-      }
-      this.playCard(player.id, cardToPlay, chosenSuit);
-    } else {
-      // Draw a card
-      this.drawCard(player.id);
-      // Now check if the newly drawn card is playable
-      const lastDrawnCard = player.hand[player.hand.length - 1];
-      if (this.isValidPlay(lastDrawnCard)) {
-        // If it's playable, play it
-        this.playCard(player.id, lastDrawnCard, lastDrawnCard.rank === '8' ? 'Spades' : undefined);
+        }
+
+        const chosenSuit = cardToPlay.rank === '8' ? chooseSuitFor8() : undefined;
+        const result = this.playCard(player.id, cardToPlay, chosenSuit);
+
+        // If a King was played successfully, the AI gets to go again immediately.
+        if (result.success && cardToPlay.rank === 'King') {
+          // Use a small delay to make the AI's second move visible
+          setTimeout(() => takeTurn(), 500);
+        } // Otherwise, the turn has already passed or the game ended.
+
       } else {
-        // If not, pass the turn
-        this.passTurn(player.id);
+        // Can't play, so must draw.
+        this.drawCard(player.id);
+        const drawnCard = player.hand[player.hand.length - 1];
+
+        // Check if the drawn card can be played.
+        if (this.isValidPlay(drawnCard)) {
+          setTimeout(() => {
+            const chosenSuit = drawnCard.rank === '8' ? chooseSuitFor8() : undefined;
+            this.playCard(player.id, drawnCard, chosenSuit);
+          }, 500);
+        } else {
+          // Can't play the drawn card, so pass.
+          this.passTurn(player.id);
+        }
       }
-    }
+    };
+
+    takeTurn();
   }
 
   getStateForPlayer(playerId: string) {

@@ -161,11 +161,20 @@ class GameState {
             this.message = `${playerName} played ${playedCard.toString()}.`;
         }
 
+        // After any successful play, reset the has-drawn flag for the turn.
+        this.playerHasDrawn = false;
+
         if (this.checkWin(playerId)) {
             return { success: true };
         }
 
-        this.nextTurn();
+        // If a King is played, the player goes again.
+        if (playedCard.rank === 'K') {
+            this.message += ` You played a King, go again!`;
+        } else {
+            this.nextTurn();
+        }
+
         return { success: true };
     }
 

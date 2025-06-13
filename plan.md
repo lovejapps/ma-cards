@@ -20,6 +20,16 @@
 - BUG: When host clicks Start Game, UI does not update for all players; fix lobby-to-game transition for all players.
 - New requirement: When a player leaves, remove them from the game state and continue to the next player.
 - BUG: Endless loop of game creation when user creates a game.
+- BUG: First join attempt says "not found"; user must join a second time.
+- BUG: Host no longer sees Start Game button in lobby.
+- Root cause: WebSocket connection is torn down and recreated on URL change, causing host/client state loss and join failures.
+- BUG: Creating a game enters loading state and nothing happens.
+- BUG: Player list text color in lobby is unreadable on web before game starts.
+- UI requirement: Card designs should show icons (suit/symbol), not just text.
+- New requirement: Add a red and black joker to the deck and display them with appropriate icons/colors.
+- New rule: Joker can be played on any card, and any card can be played on a Joker.
+- New requirement: Add a "pass turn" option—after drawing, player must explicitly pass to end their turn; do not auto-advance.
+- New rule: If a player plays K, they must immediately play another card if possible, or else draw another card before passing turn.
 
 ## Task List
 - [x] Integrate socket.io-client into the frontend project.
@@ -39,11 +49,18 @@
 - [x] Test multi-room, multi-user functionality end-to-end.
 - [x] Refactor backend and frontend to support >2 players per room and round-robin turns.
 - [x] Remove hardcoded 2-player limit in backend joinRoom handler.
-- [ ] Polish lobby UI: show Start Game button only to host, others see player list only.
+- [x] Polish lobby UI: show Start Game button only to host, others see player list only.
 - [x] Fix lobby-to-game transition: ensure all clients update UI when game starts.
 - [x] Handle player disconnect: remove from game state and advance turn.
 - [x] Fix endless loop of game creation when user creates a game.
+- [x] Fix: First join attempt says "not found"; user must join a second time.
+- [x] Fix: Host does not see Start Game button in lobby.
+- [x] Fix: Creating a game enters loading state and nothing happens.
+- [x] Fix: Player list text color in lobby is unreadable on web before game starts.
+- [x] Update card UI to use icons for suits/designs instead of text.
+- [x] Add red and black joker cards to the deck and display logic.
+- [x] Implement "pass turn" option: after drawing, player must click pass to end turn (do not auto-advance).
+- [x] Implement King (K) rule: after playing K, player must play again or draw before passing turn.
 
 ## Current Goal
-Polish lobby UI: show Start Game button only to host, others see player list only.
-Ensure robust multiplayer: handle player disconnects gracefully.
+Open for next feature or polish.
