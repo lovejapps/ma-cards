@@ -170,7 +170,7 @@ class GameState {
         }
 
         // Handle special card rules for turn progression
-        if (playedCard.rank === 'K') {
+        if (playedCard.rank === 'King') {
             this.message += ` You played a King, go again!`;
             // Turn does not change
         } else if (playedCard.rank === '7') {
