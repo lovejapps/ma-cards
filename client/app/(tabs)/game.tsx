@@ -18,7 +18,7 @@ import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
 import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
 
-const WEBSOCKET_URL = 'http://localhost:3000';
+const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || 'http://localhost:3000';
 
 // Unified game state type for rendering
 interface GameView {
@@ -38,6 +38,20 @@ export default function GameScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { gameMode, playerName, roomId, action } = params;
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch(`${WEBSOCKET_URL}/api/health`);
+        const data = await response.json();
+        console.log('Server health:', data);
+      } catch (error) {
+        console.error('Error checking server health:', error);
+      }
+    };
+
+    checkHealth();
+  }, []);
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [localGame, setLocalGame] = useState<LocalGameState | null>(null);
