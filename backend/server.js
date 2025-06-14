@@ -1,104 +1,167 @@
 // backend/server.js
 const express = require('express');
-const GameState = require('./gameState'); // Import the GameState class
-const { Card, SUITS } = require('./card'); // Import Card and SUITS for validation/creation
+const http = require('http');
+const { Server } = require("socket.io");
+const GameState = require('./gameState');
 
 const app = express();
-const port = 3000;
-
-app.use(express.json()); // Middleware to parse JSON request bodies
-
-// Simple in-memory storage for the game state
-// In a real application, you might use sessions or a database
-let currentGame = null;
-
-// Endpoint to start a new game
-app.post('/start', (req, res) => {
-    const playerName = req.body.playerName || 'Player';
-    currentGame = new GameState(playerName);
-    currentGame.startNewGame();
-    res.json(currentGame.getCurrentState());
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Be more specific in production
+        methods: ["GET", "POST"]
+    }
 });
 
-// Endpoint to get the current game state
-app.get('/state', (req, res) => {
-    if (!currentGame) {
-        return res.status(404).json({ message: "No game in progress. Start a new game using POST /start." });
-    }
-    res.json(currentGame.getCurrentState());
+const port = process.env.PORT || 3000;
+
+app.get('/api/health', (req, res) => {
+    res.json({ message: "running" });
 });
 
+// In-memory storage for game rooms
+let rooms = {}; // { roomId: { gameState, players: { socketId: playerName } } }
 
-// Endpoint for the player to play a card
-app.post('/play', (req, res) => {
-    if (!currentGame) {
-        return res.status(404).json({ message: "No game in progress. Start a new game using POST /start." });
+// Function to broadcast the state to all players in a room
+const broadcastGameState = (roomId) => {
+    const room = rooms[roomId];
+    if (room) {
+        Object.keys(room.players).forEach(playerId => {
+            const state = room.gameState.getStateForPlayer(playerId);
+            io.to(playerId).emit('gameState', state);
+        });
     }
+};
 
-    if (currentGame.gameOver) {
-         return res.status(400).json({ message: `Game is already over. ${currentGame.winner} won.` });
-    }
+io.on('connection', (socket) => {
+    console.log(`Player connected: ${socket.id}`);
 
-    const { card: cardToPlayData, chosenSuit } = req.body; // Expecting { card: { suit: '...', rank: '...' }, chosenSuit: '...' }
+    socket.on('createRoom', ({ playerName }) => {
+        const roomId = `game-${Math.random().toString(36).substr(2, 9)}`;
+        socket.join(roomId);
 
-    if (!cardToPlayData || cardToPlayData.suit === undefined || cardToPlayData.rank === undefined) {
-         return res.status(400).json({ message: "Invalid card data provided." });
-    }
+        const gameState = new GameState([{ id: socket.id, name: playerName }]);
+        rooms[roomId] = { 
+            gameState,
+            players: { [socket.id]: playerName },
+            hostId: socket.id
+        };
 
-    try {
-        // Create a Card object from the received data
-        const cardToPlay = new Card(cardToPlayData.suit, cardToPlayData.rank);
+        socket.emit('roomCreated', { roomId, playerId: socket.id, playerName });
+        console.log(`Player ${playerName} (${socket.id}) created room ${roomId}`);
+    });
 
-        // Find the card in the player's hand to ensure they have it
-         const cardInHand = currentGame.playerHand.find(card => card.equals(cardToPlay));
-         if (!cardInHand) {
-             return res.status(400).json({ message: "Card not found in player's hand." });
-         }
+    socket.on('joinRoom', ({ roomId, playerName }) => {
+        const room = rooms[roomId];
+        if (room && room.gameState.turn === null) {
+            socket.join(roomId);
+            room.players[socket.id] = playerName;
+            room.gameState.addPlayer({ id: socket.id, name: playerName });
 
-
-        // Validate and play the card
-        currentGame.playCard('player', cardToPlay, chosenSuit);
-
-        // After player plays, the app takes its turn (if game not over)
-        if (!currentGame.gameOver) {
-             currentGame.appPlayTurn();
+            console.log(`Player ${playerName} (${socket.id}) joined room ${roomId}`);
+            // Notify all players in the room about the new player
+            io.to(roomId).emit('playerJoined', { players: room.players, hostId: room.hostId });
+        } else {
+            socket.emit('gameError', { message: 'Room not found or is full.' });
         }
+    });
 
+    socket.on('startGame', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room && room.hostId === socket.id) {
+            if (Object.keys(room.players).length >= 2) {
+                room.gameState.startNewGame();
+                io.to(roomId).emit('gameStart', { roomId, players: room.players });
+                broadcastGameState(roomId);
+                console.log(`Game started in room ${roomId} by host ${socket.id}`);
+            } else {
+                socket.emit('gameError', { message: 'Not enough players to start the game.' });
+            }
+        } else {
+            socket.emit('gameError', { message: 'Only the host can start the game.' });
+        }
+    });
 
-        res.json(currentGame.getCurrentState());
+    socket.on('playCard', ({ roomId, card, chosenSuit }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const result = room.gameState.playCard(socket.id, card, chosenSuit);
+            if (result.success) {
+                broadcastGameState(roomId);
+            } else {
+                socket.emit('invalidMove', { message: result.message });
+            }
+        }
+    });
 
-    } catch (error) {
-        res.status(400).json({ message: `Error playing card: ${error.message}` });
-    }
+    socket.on('drawCard', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const result = room.gameState.drawCard(socket.id);
+            if (result.success) {
+                broadcastGameState(roomId);
+            } else {
+                socket.emit('invalidMove', { message: result.message });
+            }
+        }
+    });
+
+    socket.on('passTurn', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const result = room.gameState.passTurn(socket.id);
+            if (result.success) {
+                broadcastGameState(roomId);
+            } else {
+                socket.emit('invalidMove', { message: result.message });
+            }
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log(`Player disconnected: ${socket.id}`);
+        // Find which room the player was in
+        const roomId = Object.keys(rooms).find(id => rooms[id] && rooms[id].players[socket.id]);
+
+        if (roomId) {
+            const room = rooms[roomId];
+            const playerName = room.players[socket.id];
+            
+            // Remove player from room's player list and game state
+            delete room.players[socket.id];
+            room.gameState.removePlayer(socket.id);
+
+            console.log(`Player ${playerName} (${socket.id}) left room ${roomId}`);
+
+            // If the room is now empty, delete it
+            if (Object.keys(room.players).length === 0) {
+                delete rooms[roomId];
+                console.log(`Room ${roomId} is empty and has been closed.`);
+                return;
+            }
+
+            // If the host disconnects before the game starts, assign a new host
+            if (room.hostId === socket.id && room.gameState.turn === null) {
+                room.hostId = Object.keys(room.players)[0]; // Assign new host
+            }
+
+            // If game hasn't started, just update the lobby
+            if (room.gameState.turn === null) {
+                io.to(roomId).emit('playerJoined', { players: room.players, hostId: room.hostId });
+            }
+            // If game is active and there are enough players, continue
+            else if (Object.keys(room.players).length >= 2) {
+                broadcastGameState(roomId);
+            }
+            // Otherwise, not enough players to continue, end the game
+            else {
+                room.gameState.endGame();
+                io.to(roomId).emit('opponentDisconnected', 'The last opponent has disconnected. The game has ended.');
+            }
+        }
+    });
 });
 
-// Endpoint for the player to draw a card
-app.post('/draw', (req, res) => {
-     if (!currentGame) {
-        return res.status(404).json({ message: "No game in progress. Start a new game using POST /start." });
-    }
-
-     if (currentGame.gameOver) {
-         return res.status(400).json({ message: `Game is already over. ${currentGame.winner} won.` });
-     }
-
-     try {
-         const drawnCard = currentGame.drawCard('player');
-          // After drawing, it's still the player's turn to see if they can play the drawn card
-         res.json(currentGame.getCurrentState());
-     } catch (error) {
-         res.status(400).json({ message: `Error drawing card: ${error.message}` });
-     }
-});
-
-
-// Basic error handling (optional)
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
-});
-
-
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`Crazy Eights backend listening at http://localhost:${port}`);
 });
