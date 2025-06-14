@@ -18,8 +18,7 @@ import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
 import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
 
-// const WEBSOCKET_URL = 'http://localhost:3000';
-const WEBSOCKET_URL = 'https://ma-cards.onrender.com';
+const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || 'http://localhost:3000';
 
 // Unified game state type for rendering
 interface GameView {
