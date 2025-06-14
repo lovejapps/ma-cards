@@ -59,7 +59,7 @@ export default function LobbyScreen() {
       <View style={styles.divider} />
 
       <TouchableOpacity style={styles.button} onPress={handlePlayWithComputer}>
-        <Text style={styles.buttonText}>Play with Computer</Text>
+        <Text style={styles.buttonText}>Play with AI</Text>
       </TouchableOpacity>
     </View>
   );

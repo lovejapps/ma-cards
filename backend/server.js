@@ -3,8 +3,12 @@ const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const GameState = require('./gameState');
+const cors = require('cors');
+require('dotenv').config()
 
 const app = express();
+app.use(cors());
+app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
@@ -17,6 +21,17 @@ const port = process.env.PORT || 3000;
 
 app.get('/api/health', (req, res) => {
     res.json({ message: "running" });
+});
+
+app.post('/api/validate-password', (req, res) => {
+    const { password } = req.body;
+    const correctPassword = process.env.INVITATION_CODE || 'cascade';
+
+    if (password === correctPassword) {
+        res.json({ success: true, message: 'Password is correct.' });
+    } else {
+        res.status(401).json({ success: false, message: 'Invalid password.' });
+    }
 });
 
 // In-memory storage for game rooms

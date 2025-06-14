@@ -39,20 +39,6 @@ export default function GameScreen() {
   const params = useLocalSearchParams();
   const { gameMode, playerName, roomId, action } = params;
 
-  useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const response = await fetch(`${WEBSOCKET_URL}/api/health`);
-        const data = await response.json();
-        console.log('Server health:', data);
-      } catch (error) {
-        console.error('Error checking server health:', error);
-      }
-    };
-
-    checkHealth();
-  }, []);
-
   const [socket, setSocket] = useState<Socket | null>(null);
   const [localGame, setLocalGame] = useState<LocalGameState | null>(null);
   const [game, setGame] = useState<GameView | null>(null);
