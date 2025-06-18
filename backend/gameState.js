@@ -156,7 +156,8 @@ class GameState {
         // Handle special card logic (e.g., for '8')
         if (playedCard.rank === 'Joker') {
             this.currentSuit = playedCard.suit; // The 'suit' of the joker (for color)
-            this.message = `${playerName} played a Joker.`;
+            this.pendingDrawCount = 5;
+            this.message = `${playerName} played a Joker. Next player must draw 5 cards!`;
         } else if (playedCard.rank === '8') {
             if (!chosenSuit || !SUITS.includes(chosenSuit)) {
                 // This case should ideally be prevented by the client, but as a fallback:

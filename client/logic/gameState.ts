@@ -81,7 +81,8 @@ export class GameState {
 
     if (cardInHand.rank === 'Joker') {
       this.currentSuit = cardInHand.suit;
-      this.message = `${playerName} played a Joker.`;
+      this.pendingDrawCount = 5;
+      this.message = `${playerName} played a Joker. Next player must draw 5 cards!`;
     } else if (cardInHand.rank === '8') {
       if (!chosenSuit) {
         return { success: false, message: 'You must choose a suit when playing an 8.' };
