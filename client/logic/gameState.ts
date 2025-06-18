@@ -18,6 +18,7 @@ export class GameState {
   message: string = '';
   currentSuit: Suit | null = null;
   playerHasDrawn: boolean = false;
+  pendingDrawCount: number = 0;
 
   constructor(playerNames: string[]) {
     this.deck = new Deck();
@@ -61,6 +62,10 @@ export class GameState {
     const playerIndex = this.players.findIndex(p => p.id === playerId);
     if (playerIndex !== this.turn) return { success: false, message: "It's not your turn." };
 
+    if (this.pendingDrawCount > 0) {
+      return { success: false, message: `You must draw ${this.pendingDrawCount} cards first.` };
+    }
+
     const player = this.players[playerIndex];
     const cardInHand = player.hand.find(c => c.rank === card.rank && c.suit === card.suit);
     if (!cardInHand) return { success: false, message: 'Card not in hand.' };
@@ -99,8 +104,12 @@ export class GameState {
     }
 
     // Handle special card rules for turn progression
-    if (cardInHand.rank === 'King') {
-      this.message += ` You played a King, go again!`;
+    if (cardInHand.rank === '2') {
+      this.pendingDrawCount = 2;
+      this.message = `${playerName} played a 2. Next player must draw 2 cards!`;
+      this.nextTurn();
+    } else if (cardInHand.rank === 'King') {
+      this.message += ` You played a ${cardInHand.rank}, go again!`;
     } else if (cardInHand.rank === '7') {
       const playerName = this.players[this.turn].name;
       this.message = `${playerName} played a 7.`;
@@ -133,6 +142,14 @@ export class GameState {
   drawCard(playerId: string): { success: boolean, message: string } {
     const playerIndex = this.players.findIndex(p => p.id === playerId);
     if (playerIndex !== this.turn) return { success: false, message: "It's not your turn." };
+
+    if (this.pendingDrawCount > 0) {
+      const cardsToDraw = this.deck.deal(this.pendingDrawCount);
+      this.players[playerIndex].hand.push(...cardsToDraw);
+      this.message = `${this.players[playerIndex].name} drew ${this.pendingDrawCount} cards.`;
+      this.pendingDrawCount = 0;
+      return { success: true, message: '' };
+    }
 
     if (this.playerHasDrawn) {
       return { success: false, message: 'You have already drawn a card.' };
@@ -170,7 +187,13 @@ export class GameState {
     this.turn = (this.turn + 1) % this.players.length;
     this.playerHasDrawn = false;
     const nextPlayerName = this.players[this.turn].name;
-    this.message += ` It's now ${nextPlayerName}'s turn.`;
+
+    if (this.pendingDrawCount > 0) {
+      this.message = `${nextPlayerName} must draw ${this.pendingDrawCount} cards.`;
+    } else {
+      this.message = `It's now ${nextPlayerName}'s turn.`;
+    }
+
     if (this.players[this.turn].isComputer) {
       setTimeout(() => this.computerTurn(), 1000);
     }
@@ -194,6 +217,12 @@ export class GameState {
   }
 
   computerTurn() {
+    if (this.pendingDrawCount > 0) {
+      this.drawCard(this.players[this.turn].id);
+      // Re-evaluate after drawing
+      setTimeout(() => this.computerTurn(), 500);
+      return;
+    }
     const player = this.players[this.turn];
     if (!player || !player.isComputer) return;
 
