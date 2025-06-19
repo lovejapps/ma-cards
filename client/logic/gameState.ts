@@ -271,7 +271,7 @@ export class GameState {
 
         // If a go-again card was played successfully, the AI gets to go again immediately.
         if (result.success && (cardToPlay.rank === 'King' || (cardToPlay.rank === 'Jack' && this.players.length === 2))) {
-          setTimeout(() => takeTurn(), 500);
+          setTimeout(() => takeTurn(), 100);
         }
       } else {
         this.drawCard(player.id);
