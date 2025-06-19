@@ -19,6 +19,7 @@ class GameState {
         this.message = "";
         this.turn = null;
         this.playerHasDrawn = false;
+        this.pendingDrawCount = 0; // Track if next player needs to draw cards
 
     }
 
@@ -125,6 +126,14 @@ class GameState {
         if (this.turn !== playerId) {
             return { success: false, message: "It's not your turn." };
         }
+        
+        // If there's a pending draw, player must draw first
+        if (this.pendingDrawCount > 0 && playerId === this.turn) {
+            return { 
+                success: false, 
+                message: `You must draw ${this.pendingDrawCount} card${this.pendingDrawCount > 1 ? 's' : ''} first.` 
+            };
+        }
 
         const player = this.players[playerId];
         const cardIndex = player.hand.findIndex(card => card.suit === cardToPlayData.suit && card.rank === cardToPlayData.rank);
@@ -147,7 +156,8 @@ class GameState {
         // Handle special card logic (e.g., for '8')
         if (playedCard.rank === 'Joker') {
             this.currentSuit = playedCard.suit; // The 'suit' of the joker (for color)
-            this.message = `${playerName} played a Joker.`;
+            this.pendingDrawCount = 5;
+            this.message = `${playerName} played a Joker. Next player must draw 5 cards!`;
         } else if (playedCard.rank === '8') {
             if (!chosenSuit || !SUITS.includes(chosenSuit)) {
                 // This case should ideally be prevented by the client, but as a fallback:
@@ -170,7 +180,11 @@ class GameState {
         }
 
         // Handle special card rules for turn progression
-        if (playedCard.rank === 'King') {
+        if (playedCard.rank === '2') {
+            this.pendingDrawCount = 2;
+            this.message = `${playerName} played a 2. Next player must draw 2 cards!`;
+            this.nextTurn();
+        } else if (playedCard.rank === 'King') {
             this.message += ` You played a King, go again!`;
             // Turn does not change
         } else if (playedCard.rank === '7') {
@@ -204,6 +218,36 @@ class GameState {
             return { success: false, message: "It's not your turn to draw." };
         }
 
+        // Handle forced draw from a '2' card
+        if (this.pendingDrawCount > 0) {
+            const numToDraw = Math.min(this.pendingDrawCount, 2); // Max 2 cards for '2' rule
+            const cards = [];
+            
+            for (let i = 0; i < numToDraw; i++) {
+                if (this.deck.cards.length === 0) {
+                    if (this.discardPile.length <= 1) {
+                        this.message = "No cards left to draw. The game is a draw.";
+                        this.gameOver = true;
+                        this.winner = 'draw';
+                        return { success: true };
+                    }
+                    // Reshuffle discard pile into deck
+                    const topCard = this.discardPile.pop();
+                    this.deck.cards = this.discardPile;
+                    this.discardPile = [topCard];
+                    this.deck.shuffle();
+                    this.message = "Deck reshuffled.";
+                }
+                cards.push(this.deck.deal(1)[0]);
+            }
+            
+            this.players[playerId].hand.push(...cards);
+            this.pendingDrawCount = 0;
+            this.message = `${this.players[playerId].name} drew ${cards.length} card${cards.length > 1 ? 's' : ''} (forced by '2' rule).`;
+            return { success: true, cards, wasForced: true };
+        }
+
+        // Normal draw (player's choice)
         if (this.playerHasDrawn) {
             return { success: false, message: "You have already drawn a card this turn." };
         }
@@ -248,7 +292,12 @@ class GameState {
         this.turn = this.playerIds[nextIndex];
         this.playerHasDrawn = false; // Reset for the next player
         const nextPlayerName = this.players[this.turn].name;
-        this.message += ` It's now ${nextPlayerName}'s turn.`;
+        
+        if (this.pendingDrawCount > 0) {
+            this.message = `${nextPlayerName} must draw ${this.pendingDrawCount} card${this.pendingDrawCount > 1 ? 's' : ''} before playing.`;
+        } else {
+            this.message = `It's now ${nextPlayerName}'s turn.`;
+        }
     }
 
     skipNextPlayer() {
