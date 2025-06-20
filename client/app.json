@@ -11,7 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lovejapps.macards",
-      "buildNumber": "1.0.0"
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.lovejapps.macards",
@@ -41,10 +44,22 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "51dbbc1e-62b8-474b-99ba-a4cd62ba3506"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/51dbbc1e-62b8-474b-99ba-a4cd62ba3506"
     }
   },
   "extra": {
-    "EXPO_PUBLIC_WEBSOCKET_URL":"https://macards.api.lovejapps.com"
+    "EXPO_PUBLIC_WEBSOCKET_URL": "https://macards.api.lovejapps.com"
   },
   "owner": "lovej_apps"
 }

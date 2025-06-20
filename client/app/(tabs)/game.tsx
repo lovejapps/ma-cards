@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   startButton: { backgroundColor: '#28a745', padding: 15, borderRadius: 8, alignItems: 'center', width: '80%', marginTop: 20 },
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0' },
   gameArea: { flex: 1, width: '100%' },
-  opponentInfo: { padding: 10, alignItems: 'center' },
+  opponentInfo: { padding: 10, alignItems: 'center', marginTop: 30 },
   deckArea: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 20 },
   cardBack: { width: 70, height: 100, backgroundColor: 'blue', borderRadius: 8 },
   hand: { padding: 10 },
