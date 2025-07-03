@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
   Clipboard,
+  StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
@@ -251,7 +252,7 @@ export default function GameScreen() {
 
       <View style={styles.gameArea}>
         {gameMode === 'multiplayer' && (
-          <View style={styles.header}>
+          <View style={[styles.headerSafeArea, styles.header]}>
             <Text style={styles.headerText}>Room: {roomId}</Text>
             <TouchableOpacity style={styles.copyButtonSmall} onPress={handleCopyRoomId}><Text style={styles.copyButtonText}>Copy ID</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => { socket?.disconnect(); router.back(); }}><Text style={styles.leaveButtonText}>Leave</Text></TouchableOpacity>
@@ -289,6 +290,9 @@ export default function GameScreen() {
 
 const styles = StyleSheet.create({
   // ... (rest of the styles remain the same)
+  headerSafeArea: {
+    paddingTop: Platform.OS === 'ios' ? 78 : (StatusBar.currentHeight || 24),
+  },
   hand: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   // ... (rest of the styles remain the same)
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#f5f5f5' },
