@@ -4,7 +4,6 @@ import {
   Alert,
   Modal,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,6 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
 import { Card as CardComponent } from '@/components/Card';
+import { CardHand } from '@/components/CardHand';
 import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
 import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
@@ -277,19 +277,20 @@ export default function GameScreen() {
           {game.currentSuit && <Text>Suit: {game.currentSuit}</Text>}
         </View>
         <Text style={styles.statusMessage}>{game.message}</Text>
-        <ScrollView horizontal style={styles.hand}>
-          {game.myHand.map((card, index) => (
-            <TouchableOpacity key={index} onPress={() => handlePlayCard(card)} disabled={game.turn !== game.myId}>
-              <CardComponent card={card} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+         {/* Arch layout for hand */}
+         <View style={styles.hand}>
+           <CardHand cards={game.myHand} onCardPress={handlePlayCard} />
+           {/* Optionally, wrap CardHand in TouchableOpacity for play actions if needed */}
+         </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // ... (rest of the styles remain the same)
+  hand: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  // ... (rest of the styles remain the same)
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#f5f5f5' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
   infoText: { fontSize: 16, marginBottom: 10 },
@@ -312,7 +313,6 @@ const styles = StyleSheet.create({
   opponentInfo: { padding: 10, alignItems: 'center', marginTop: 100 },
   deckArea: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 20 },
   cardBack: { width: 70, height: 100, backgroundColor: 'blue', borderRadius: 8 },
-  hand: { padding: 10 },
   modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10, alignItems: 'center' },
   suitChoice: { padding: 10, fontSize: 18 },
