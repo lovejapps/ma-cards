@@ -9,6 +9,46 @@ export interface Player {
 }
 
 export class GameState {
+  static fromJSON(obj: any): GameState {
+    const game = new GameState([obj.players[0].name]);
+    game.players = obj.players.map((p: any) => ({
+      ...p,
+      hand: p.hand.map((c: any) => new Card(c.suit, c.rank)),
+    }));
+    game.deck = Object.assign(new Deck(), obj.deck);
+    game.deck.cards = obj.deck.cards.map((c: any) => new Card(c.suit, c.rank));
+    game.discardPile = obj.discardPile.map((c: any) => new Card(c.suit, c.rank));
+    game.turn = obj.turn;
+    game.gameOver = obj.gameOver;
+    game.winner = obj.winner;
+    game.message = obj.message;
+    game.currentSuit = obj.currentSuit;
+    game.playerHasDrawn = obj.playerHasDrawn;
+    game.pendingDrawCount = obj.pendingDrawCount;
+    return game;
+  }
+
+  toJSON() {
+    return {
+      players: this.players.map(p => ({
+        ...p,
+        hand: p.hand.map(c => c.toJSON()),
+      })),
+      deck: {
+        ...this.deck,
+        cards: this.deck.cards.map((c: Card) => c.toJSON()),
+      },
+      discardPile: this.discardPile.map((c: Card) => c.toJSON()),
+      turn: this.turn,
+      gameOver: this.gameOver,
+      winner: this.winner,
+      message: this.message,
+      currentSuit: this.currentSuit,
+      playerHasDrawn: this.playerHasDrawn,
+      pendingDrawCount: this.pendingDrawCount,
+    };
+  }
+
   players: Player[] = [];
   deck: Deck;
   discardPile: Card[] = [];

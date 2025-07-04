@@ -59,7 +59,8 @@ io.on('connection', (socket) => {
         rooms[roomId] = { 
             gameState,
             players: { [socket.id]: playerName },
-            hostId: socket.id
+            hostId: socket.id,
+            gameStarted: false // Add gameStarted flag
         };
 
         socket.emit('roomCreated', { roomId, playerId: socket.id, playerName });
@@ -68,7 +69,7 @@ io.on('connection', (socket) => {
 
     socket.on('joinRoom', ({ roomId, playerName }) => {
         const room = rooms[roomId];
-        if (room && room.gameState.turn === null) {
+        if (room && !room.gameStarted) {
             socket.join(roomId);
             room.players[socket.id] = playerName;
             room.gameState.addPlayer({ id: socket.id, name: playerName });
@@ -77,13 +78,16 @@ io.on('connection', (socket) => {
             // Notify all players in the room about the new player
             io.to(roomId).emit('playerJoined', { players: room.players, hostId: room.hostId });
         } else {
-            socket.emit('gameError', { message: 'Room not found or is full.' });
+            socket.emit('gameError', { message: 'Room not found or game already started.' });
         }
     });
 
     socket.on('startGame', ({ roomId }) => {
         const room = rooms[roomId];
         if (room && room.hostId === socket.id) {
+            if (!room.gameStarted) {
+                room.gameStarted = true;
+            }
             if (Object.keys(room.players).length >= 2) {
                 room.gameState.startNewGame();
                 io.to(roomId).emit('gameStart', { roomId, players: room.players });

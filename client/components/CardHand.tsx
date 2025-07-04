@@ -14,7 +14,7 @@ const CARD_WIDTH = 80;
 const CARD_HEIGHT = 120;
 const MAX_FAN_ANGLE = -10; // degrees
 const BASE_CARD_OVERLAP = 28; // px
-const MIN_CARD_OVERLAP = 8; // px
+const MIN_CARD_OVERLAP = 25; // px
 
 export function CardHand({ cards, onCardPress }: CardHandProps) {
   const cardCount = cards.length;
@@ -68,6 +68,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     marginTop: 16,
     marginBottom: 16,
+    display: 'flex',
+    left: "-25vh",
   },
   cardWrapper: {
     position: 'absolute',

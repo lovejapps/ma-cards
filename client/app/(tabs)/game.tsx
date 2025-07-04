@@ -1,4 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import * as SecureStore from 'expo-secure-store';
+
+
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +38,30 @@ interface GameView {
   playerHasDrawn: boolean;
 }
 
+// --- Storage abstraction for cross-platform persistence ---
+const storage = {
+  async getItem(key: string) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key);
+      } else {
+        return await SecureStore.getItemAsync(key);
+      }
+    } catch {
+      return null;
+    }
+  },
+  async setItem(key: string, value: string) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+      } else {
+        await SecureStore.setItemAsync(key, value);
+      }
+    } catch {}
+  },
+};
+
 export default function GameScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -58,6 +85,27 @@ export default function GameScreen() {
     }
   };
 
+  // --- Reset game logic ---
+  async function handleResetGame() {
+    if (gameMode === 'singleplayer') {
+      await storage.setItem('ma_cards_singleplayer', '');
+      const newLocalGame = new LocalGameState([playerName as string]);
+      setLocalGame(newLocalGame);
+      updateGameStateView(newLocalGame, 'player1');
+    } else if (gameMode === 'multiplayer') {
+      if (socket && roomId) {
+        socket.emit('resetGame', { roomId });
+        // Optionally clear local game state view
+        setGame(null);
+      }
+    }
+  }
+
+  const handleCancel = async () => {
+    await handleResetGame();
+    router.back()
+  }
+
   const updateGameStateView = useCallback((state: LocalGameState | ServerGameState, localPlayerId?: string) => {
     if (state instanceof LocalGameState) {
       const localState = state.getStateForPlayer(localPlayerId || 'player1');
@@ -67,17 +115,51 @@ export default function GameScreen() {
       const serverState = state as any;
       serverState.winner = serverState.winnerName;
       setGame(serverState as GameView);
+      // Save game view for multiplayer persistence
+      if (roomId) {
+        storage.setItem(`ma_cards_multiplayer_${roomId}`, JSON.stringify(serverState));
+      }
     }
-  }, []);
+  }, [roomId]);
 
-  // Effect for single player mode
+  // Effect for single player mode with persistence
   useEffect(() => {
     if (gameMode === 'singleplayer') {
-      const newLocalGame = new LocalGameState([playerName as string]);
-      setLocalGame(newLocalGame);
-      updateGameStateView(newLocalGame, 'player1');
+      (async () => {
+        const saved = await storage.getItem('ma_cards_singleplayer');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            const restoredGame = LocalGameState.fromJSON(parsed);
+            setLocalGame(restoredGame);
+            updateGameStateView(restoredGame, 'player1');
+            return;
+          } catch {
+            // fallback to new game
+          }
+        }
+        const newLocalGame = new LocalGameState([playerName as string]);
+        setLocalGame(newLocalGame);
+        updateGameStateView(newLocalGame, 'player1');
+      })();
     }
   }, [gameMode, playerName, updateGameStateView]);
+
+  useEffect(() => {
+    if (gameMode !== 'multiplayer') return;
+
+    // Try to restore from storage if available
+    (async () => {
+      if (roomId) {
+        const saved = await storage.getItem(`ma_cards_multiplayer_${roomId}`);
+        if (saved) {
+          try {
+            setGame(JSON.parse(saved));
+          } catch {}
+        }
+      }
+    })();
+  }, [roomId]);
 
   // Effect for WebSocket connection and event listeners
   useEffect(() => {
@@ -151,8 +233,10 @@ export default function GameScreen() {
     } else {
       if (gameMode === 'singleplayer' && localGame) {
         const result = localGame.playCard('player1', new Card(card.suit, card.rank));
-        if (result.success) updateGameStateView(localGame, 'player1');
-        else showAlert('Invalid Move', result.message);
+        if (result.success) {
+          updateGameStateView(localGame, 'player1');
+          storage.setItem('ma_cards_singleplayer', JSON.stringify(localGame.toJSON()));
+        } else showAlert('Invalid Move', result.message);
       } else {
         socket?.emit('playCard', { roomId, card });
       }
@@ -169,14 +253,20 @@ export default function GameScreen() {
         socket?.emit('playCard', { roomId, card: suitChoice.card, chosenSuit: suit });
       }
       setSuitChoice({ show: false, card: null });
+      // Save after suit choice
+      if (gameMode === 'singleplayer' && localGame) {
+        storage.setItem('ma_cards_singleplayer', JSON.stringify(localGame.toJSON()));
+      }
     }
   };
 
   const handleDrawCard = () => {
     if (gameMode === 'singleplayer' && localGame) {
       const result = localGame.drawCard('player1');
-      if (result.success) updateGameStateView(localGame, 'player1');
-      else showAlert('Invalid Move', result.message);
+      if (result.success) {
+        updateGameStateView(localGame, 'player1');
+        storage.setItem('ma_cards_singleplayer', JSON.stringify(localGame.toJSON()));
+      } else showAlert('Invalid Move', result.message);
     } else {
       socket?.emit('drawCard', { roomId });
     }
@@ -187,6 +277,7 @@ export default function GameScreen() {
       const result = localGame.passTurn('player1');
       if (result.success) {
         updateGameStateView(localGame, 'player1');
+        storage.setItem('ma_cards_singleplayer', JSON.stringify(localGame.toJSON()));
       } else {
         showAlert('Invalid Move', result.message);
       }
@@ -230,7 +321,7 @@ export default function GameScreen() {
           <Text style={styles.infoText}>Waiting for the host to start the game...</Text>
         )}
 
-        <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
       </View>
     );
   }
@@ -251,39 +342,44 @@ export default function GameScreen() {
       </Modal>
 
       <View style={styles.gameArea}>
-        {gameMode === 'multiplayer' && (
+        {gameMode === 'multiplayer' ? (
           <View style={[styles.headerSafeArea, styles.header]}>
             <Text style={styles.headerText}>Room: {roomId}</Text>
             <TouchableOpacity style={styles.copyButtonSmall} onPress={handleCopyRoomId}><Text style={styles.copyButtonText}>Copy ID</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { handleResetGame(); }}><Text style={[styles.leaveButtonText, { color: '#dc3545' }]}>Reset Game</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => { socket?.disconnect(); router.back(); }}><Text style={styles.leaveButtonText}>Leave</Text></TouchableOpacity>
           </View>
+        ) : (
+        <View style={[styles.headerSafeArea, styles.header]}>
+          <TouchableOpacity onPress={() => { handleResetGame(); }}><Text style={[styles.leaveButtonText, { color: '#dc3545' }]}>Reset Game</Text></TouchableOpacity>
+          <TouchableOpacity onPress={async () => { await storage.setItem('ma_cards_singleplayer', '') ; router.back(); }}><Text style={styles.leaveButtonText}>Exit</Text></TouchableOpacity>
+        </View>
         )}
         <View style={styles.opponentInfo}>
           {game.opponents.map(op => <Text key={op.id}>{op.name}: {op.handSize} cards</Text>)}
         </View>
-        <View style={styles.deckArea}>
-          <View style={styles.actionButtons}>
-            {!game?.playerHasDrawn ? (
-              <TouchableOpacity onPress={handleDrawCard} disabled={game.turn !== game.myId} style={styles.actionButton}>
-                <View style={styles.cardBack} />
-                <Text style={styles.actionButtonText}>Draw Card</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={handlePassTurn} disabled={game.turn !== game.myId} style={styles.passButton}>
-                <Text style={styles.buttonText}>Pass Turn</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {game.topCard && <CardComponent card={game.topCard} />}
-          {game.currentSuit && <Text>Suit: {game.currentSuit}</Text>}
-        </View>
-        <Text style={styles.statusMessage}>{game.message}</Text>
-         {/* Arch layout for hand */}
-         <View style={styles.hand}>
-           <CardHand cards={game.myHand} onCardPress={handlePlayCard} />
-           {/* Optionally, wrap CardHand in TouchableOpacity for play actions if needed */}
-         </View>
       </View>
+      <View style={styles.deckArea}>
+        <View style={styles.actionButtons}>
+          {!game?.playerHasDrawn ? (
+            <TouchableOpacity onPress={handleDrawCard} disabled={game.turn !== game.myId} style={styles.actionButton}>
+              <View style={styles.cardBack} />
+              <Text style={styles.actionButtonText}>Draw Card</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={handlePassTurn} disabled={game.turn !== game.myId} style={styles.passButton}>
+              <Text style={styles.buttonText}>Pass Turn</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {game.topCard && <CardComponent card={game.topCard} />}
+        {game.currentSuit && <Text>Suit: {game.currentSuit}</Text>}
+      </View>
+      <Text style={styles.statusMessage}>{game.message}</Text>
+      <View style={styles.hand}>
+        <CardHand cards={game.myHand} onCardPress={handlePlayCard} />
+      </View>
+
     </View>
   );
 }
@@ -303,17 +399,29 @@ const styles = StyleSheet.create({
   copyButton: { backgroundColor: '#007AFF', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 5 },
   copyButtonSmall: { backgroundColor: '#007AFF', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5, marginHorizontal: 10 },
   copyButtonText: { color: 'white', fontSize: 14 },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  resetButton: {
+    backgroundColor: '#dc3545',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    width: '80%',
+    marginTop: 20,
+    alignSelf: 'center',
+  },
   leaveButtonText: { color: 'red', fontSize: 14 },
   cancelButton: { backgroundColor: '#dc3545', padding: 15, borderRadius: 8, alignItems: 'center', width: '80%', marginTop: 20 },
   cancelButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#ccc', backgroundColor: '#f8f8f8' },
   headerText: { fontSize: 16, fontWeight: 'bold' },
-  playerList: { marginVertical: 20 },
   playerName: { fontSize: 18, padding: 5 },
   startButton: { backgroundColor: '#28a745', padding: 15, borderRadius: 8, alignItems: 'center', width: '80%', marginTop: 20 },
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0' },
-  gameArea: { flex: 1, width: '100%' },
+  gameArea: { width: '100%', flex: 0.4 },
   opponentInfo: { padding: 10, alignItems: 'center', marginTop: 100 },
   deckArea: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 20 },
   cardBack: { width: 70, height: 100, backgroundColor: 'blue', borderRadius: 8 },
