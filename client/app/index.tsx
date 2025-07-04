@@ -23,6 +23,8 @@ export default function LoginScreen() {
       };
   
       checkHealth();
+      // skip login screen temporarily
+      // router.replace('/(tabs)');
     }, []);
 
   const handleLogin = async () => {
