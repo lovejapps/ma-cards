@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function LobbyScreen() {
@@ -33,7 +33,8 @@ export default function LobbyScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Crazy Eights</Text>
+      {/* <Text style={styles.title}>Crazy Eights</Text> */}
+      <Image source={require('../../assets/images/logo.jpg')} style={{ width: 300, height: 120, paddingBottom: 10, marginBottom: 10, borderRadius: 10 }} />
       <TextInput
         style={styles.input}
         placeholder="Enter your name"
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    backgroundColor: '#007AFF',
+    backgroundColor: 'green',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',

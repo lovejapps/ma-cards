@@ -61,15 +61,14 @@ export function CardHand({ cards, onCardPress }: CardHandProps) {
 
 const styles = StyleSheet.create({
   handContainer: {
-    width: '100%',
+    display: 'flex',
+    flexDirection: 'row',
+    width: "100%",
     height: 250,
     position: 'relative',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     marginTop: 16,
     marginBottom: 16,
-    display: 'flex',
-    left: "-25vh",
   },
   cardWrapper: {
     position: 'absolute',
