@@ -34,7 +34,9 @@ export default function LobbyScreen() {
   return (
     <View style={styles.container}>
       {/* <Text style={styles.title}>Crazy Eights</Text> */}
-      <Image source={require('../../assets/images/logo.jpg')} style={{ width: 300, height: 120, paddingBottom: 10, marginBottom: 10, borderRadius: 10 }} />
+      <View style={{width: 300, height: 150, backgroundColor: 'white', borderRadius: 10, marginBottom: 10}}>
+      <Image source={require('../../assets/images/logo.jpg')} style={{ width: 300, height: 120, borderRadius: 10 }} />
+      </View>
       <TextInput
         style={styles.input}
         placeholder="Enter your name"
@@ -91,13 +93,19 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    backgroundColor: 'green',
     padding: 15,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: 'center', //glass
+    overflow: 'visible',
+    color: 'green',
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+    backdropFilter: 'blur(14px) saturate(180%)',
+    transitionProperty: 'box-shadow 0.3s',
   },
   buttonText: {
-    color: 'white',
+    color: 'grey',
     fontSize: 18,
     fontWeight: 'bold',
   },

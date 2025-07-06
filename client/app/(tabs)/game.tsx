@@ -15,6 +15,7 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
+import { HamburgerMenu } from '../../components/HamburgerMenu';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
 import { Card as CardComponent } from '@/components/Card';
@@ -343,19 +344,31 @@ export default function GameScreen() {
       </Modal>
 
       <View style={styles.gameArea}>
-        {gameMode === 'multiplayer' ? (
-          <View style={[styles.headerSafeArea, styles.header]}>
+        <View style={[styles.headerSafeArea, styles.header]}>
+        {gameMode === 'multiplayer' && (
+          <View style={{flexDirection: 'row', alignItems: 'center'}}>
             <Text style={styles.headerText}>Room: {roomId}</Text>
             <TouchableOpacity style={styles.copyButtonSmall} onPress={handleCopyRoomId}><Text style={styles.copyButtonText}>Copy ID</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleResetGame(); }}><Text style={[styles.leaveButtonText, { color: '#dc3545' }]}>Reset Game</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => { socket?.disconnect(); router.back(); }}><Text style={styles.leaveButtonText}>Leave</Text></TouchableOpacity>
           </View>
-        ) : (
-        <View style={[styles.headerSafeArea, styles.header]}>
-          <TouchableOpacity onPress={() => { handleResetGame(); }}><Text style={[styles.leaveButtonText, { color: '#dc3545' }]}>Reset Game</Text></TouchableOpacity>
-          <TouchableOpacity onPress={async () => { await storage.setItem('ma_cards_singleplayer', '') ; router.back(); }}><Text style={styles.leaveButtonText}>Exit</Text></TouchableOpacity>
-        </View>
         )}
+        {gameMode === 'singleplayer' ? (
+          <View style={{height: 20, width: '100%'}}>
+            <HamburgerMenu
+              items={[
+                { label: 'Reset Game', onPress: handleResetGame },
+                { label: 'Exit', onPress: async () => { await storage.setItem('ma_cards_singleplayer', ''); router.back(); } }
+              ]}
+            />
+          </View>
+          ) : (
+            <HamburgerMenu
+              items={[
+                { label: 'Reset Game', onPress: handleResetGame },
+                { label: 'Leave', onPress: () => { socket?.disconnect(); router.back(); } }
+              ]}
+            />
+          )}
+        </View>
         <View style={styles.opponentInfo}>
           {game.opponents.map(op => <Text key={op.id}>{op.name}: {op.handSize} cards</Text>)}
         </View>
@@ -395,7 +408,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    left: -(Dimensions.get('window').width / 2) + 80,
+    left: -(Dimensions.get('window').width / 2) + (Platform.OS === "web" ? 80 : 260),
   },
   // ... (rest of the styles remain the same)
   center: {

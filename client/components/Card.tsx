@@ -65,6 +65,12 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     overflow: 'hidden',
+    // liquid glass
+    color: 'white',
+    borderColor: 'rgba(255,255,255,0.25)',
+    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+    backdropFilter: 'blur(14px) saturate(180%)',
+    transitionProperty: 'box-shadow 0.3s',
   },
   cornerInfoTR: {
     position: 'absolute',
