@@ -34,6 +34,7 @@ export function CardHand({ cards, onCardPress }: CardHandProps) {
         const x = centerX + radius * Math.sin(rad) - i * CARD_OVERLAP;
         const y = radius * (1 + Math.cos(rad)) - 280; // Bring hand up closer to center card
         return (
+          cards.length > 4 ? (
           <View
             key={`${card.suit}-${card.rank}-${i}`}
             style={[
@@ -53,6 +54,11 @@ export function CardHand({ cards, onCardPress }: CardHandProps) {
               <Card card={card} />
             </TouchableOpacity>
           </View>
+          ) : (
+            <TouchableOpacity style={{left: 120}} key={`${card.suit}-${card.rank}-${i}`} activeOpacity={0.8} onPress={() => onCardPress && onCardPress(card)}>
+              <Card card={card} />
+            </TouchableOpacity>
+          )
         );
       })}
     </View>

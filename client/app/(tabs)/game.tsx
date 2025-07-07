@@ -495,11 +495,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
-    // justifyContent: "center",
     backgroundColor: "#f0f0f0",
   },
   gameArea: { width: "100%" },
-  opponentInfo: { padding: 10, alignItems: "center", marginTop: 100 },
+  opponentInfo: { padding: 10, alignItems: "center", marginTop: 100, zIndex: -1 },
   deckArea: {
     flexDirection: "row",
     justifyContent: "space-around",
