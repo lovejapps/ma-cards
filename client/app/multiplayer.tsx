@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { storage } from '@/helpers/storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || "https://macards.api.lovejapps.com";
 
-interface User {
-  displayName: string;
-}
 export default function LoginScreen() {
-  const [playerName, setPlayerName] = useState('');
-  const [user, setUser] = useState<User | null>(null);
+  const params = useLocalSearchParams();
+  const { playerName } = params;
+  const [password, setPassword] = useState('');
   const [apiReady, setApiReady] = useState(false);
   const router = useRouter();
 
@@ -25,26 +22,26 @@ export default function LoginScreen() {
           console.error('Error checking server health:', error);
         }
       };
-
-      const getPlayerName = async () => {
-        const user = await storage.getItem('user');
-        if (user) {
-          const parsed = JSON.parse(user);
-          setUser(parsed);
-          setPlayerName(parsed.displayName);
-        }
-      };
   
       checkHealth();
-      getPlayerName();
     }, []);
 
-  const handleSelectMultiplayer = async () => {
+  const handleLogin = async () => {
     try {
-      if (playerName) {
-        router.push({ pathname: '/multiplayer', params: { gameMode: 'multiplayer', playerName } });
+      const response = await fetch(`${WEBSOCKET_URL}/api/validate-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        router.push({ pathname: '/(tabs)', params: { gameMode: 'multiplayer', playerName } });
       } else {
-        Alert.alert('Login Failed', 'Player name is required.');
+        Alert.alert('Login Failed', data.message || 'Invalid password.');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -52,36 +49,20 @@ export default function LoginScreen() {
     }
   };
 
-    const handlePlayWithComputer = () => {
-      if (!playerName.trim()) {
-        Alert.alert('Player name is required.', playerName);
-        console.log('Player name is required.');
-        return;
-      }
-      setUser({ displayName: playerName });
-      storage.setItem('user', JSON.stringify({ displayName: playerName }));
-      router.push({ pathname: '/(tabs)/game', params: { gameMode: 'singleplayer', playerName } });
-    };
-
   return (
     <View style={styles.container}>
       <Image source={require('../assets/images/macards.png')} style={styles.logo} />
-      <Text style={styles.title}>{user && user.displayName ? `Welcome ${user.displayName}` : 'Enter your name'}</Text>
-      {user ? null : (
-        <TextInput
+      <Text style={styles.title}>Enter password</Text>
+      <TextInput
         style={styles.input}
-        placeholder="Name"
-        value={playerName}
-        onChangeText={setPlayerName}
-        onSubmitEditing={handlePlayWithComputer}
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        onSubmitEditing={handleLogin}
       />
-      )}
-      <TouchableOpacity style={styles.button} onPress={handlePlayWithComputer} disabled={!apiReady}>
-        <Text style={styles.buttonText}>Play with AI</Text>
-      </TouchableOpacity>
-      <View style={styles.divider} />
-      <TouchableOpacity style={styles.button} onPress={handleSelectMultiplayer} disabled={!apiReady}>
-        <Text style={styles.buttonText}>Play Multiplayer</Text>
+      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={!apiReady}>
+        <Text style={styles.buttonText}>Enter</Text>
       </TouchableOpacity>
     </View>
   );

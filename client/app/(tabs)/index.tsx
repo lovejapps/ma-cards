@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 export default function LobbyScreen() {
-  const [playerName, setPlayerName] = useState('');
+  const params = useLocalSearchParams();
+  const { playerName } = params;
   const [roomId, setRoomId] = useState('');
   const router = useRouter();
 
   const handleCreateGame = () => {
-    if (!playerName.trim()) {
+    if (!(playerName as string).trim()) {
       Alert.alert('Player name is required.');
       return;
     }
@@ -16,33 +17,18 @@ export default function LobbyScreen() {
   };
 
   const handleJoinGame = () => {
-    if (!playerName.trim() || !roomId.trim()) {
+    if (!(playerName as string).trim() || !roomId.trim()) {
       Alert.alert('Player name and Room ID are required.');
       return;
     }
     router.push({ pathname: '/game', params: { gameMode: 'multiplayer', action: 'join', playerName, roomId } });
   };
 
-  const handlePlayWithComputer = () => {
-    if (!playerName.trim()) {
-      Alert.alert('Player name is required.');
-      return;
-    }
-    router.push({ pathname: '/game', params: { gameMode: 'singleplayer', playerName } });
-  };
-
   return (
     <View style={styles.container}>
-      {/* <Text style={styles.title}>Crazy Eights</Text> */}
       <View style={{width: 300, height: 150, backgroundColor: 'white', borderRadius: 10, marginBottom: 10}}>
       <Image source={require('../../assets/images/logo.jpg')} style={{ width: 300, height: 120, borderRadius: 10 }} />
       </View>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter your name"
-        value={playerName}
-        onChangeText={setPlayerName}
-      />
       <TouchableOpacity style={styles.button} onPress={handleCreateGame}>
         <Text style={styles.buttonText}>Create Game</Text>
       </TouchableOpacity>
@@ -60,10 +46,6 @@ export default function LobbyScreen() {
       </TouchableOpacity>
 
       <View style={styles.divider} />
-
-      <TouchableOpacity style={styles.button} onPress={handlePlayWithComputer}>
-        <Text style={styles.buttonText}>Play with AI</Text>
-      </TouchableOpacity>
     </View>
   );
 }

@@ -1,6 +1,4 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import * as SecureStore from 'expo-secure-store';
-
 
 import {
   ActivityIndicator,
@@ -23,6 +21,7 @@ import { CardHand } from '@/components/CardHand';
 import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
 import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
+import { storage } from '@/helpers/storage';
 
 const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || "https://macards.api.lovejapps.com";
 
@@ -39,30 +38,6 @@ interface GameView {
   myId: string;
   playerHasDrawn: boolean;
 }
-
-// --- Storage abstraction for cross-platform persistence ---
-const storage = {
-  async getItem(key: string) {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        return window.localStorage.getItem(key);
-      } else {
-        return await SecureStore.getItemAsync(key);
-      }
-    } catch {
-      return null;
-    }
-  },
-  async setItem(key: string, value: string) {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(key, value);
-      } else {
-        await SecureStore.setItemAsync(key, value);
-      }
-    } catch {}
-  },
-};
 
 export default function GameScreen() {
   const router = useRouter();
@@ -101,6 +76,16 @@ export default function GameScreen() {
         setGame(null);
       }
     }
+  }
+
+  const handleSwitchPlayerMode = async () => { 
+    await storage.setItem('ma_cards_singleplayer', '');
+    router.dismiss(2);
+  }
+  const handleLogoutExit = async () => { 
+    await storage.setItem('ma_cards_singleplayer', '');
+    await storage.setItem('user', '');
+    setTimeout(() => { router.dismiss(2); }, 300);
   }
 
   const handleCancel = async () => {
@@ -356,7 +341,8 @@ export default function GameScreen() {
             <HamburgerMenu
               items={[
                 { label: 'Reset Game', onPress: handleResetGame },
-                { label: 'Exit', onPress: async () => { await storage.setItem('ma_cards_singleplayer', ''); router.back(); } }
+                { label: 'Switch Player Mode', onPress: handleSwitchPlayerMode },
+                { label: 'Logout & Exit', onPress: handleLogoutExit }
               ]}
             />
           </View>

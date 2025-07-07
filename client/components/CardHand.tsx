@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Platform } from 'react-native';
 import { Card } from './Card';
 import { Card as CardType } from '../types';
 
@@ -55,7 +55,7 @@ export function CardHand({ cards, onCardPress }: CardHandProps) {
             </TouchableOpacity>
           </View>
           ) : (
-            <TouchableOpacity style={{left: 120}} key={`${card.suit}-${card.rank}-${i}`} activeOpacity={0.8} onPress={() => onCardPress && onCardPress(card)}>
+            <TouchableOpacity style={{left: Platform.OS === 'web' ? 120 : -40}} key={`${card.suit}-${card.rank}-${i}`} activeOpacity={0.8} onPress={() => onCardPress && onCardPress(card)}>
               <Card card={card} />
             </TouchableOpacity>
           )
