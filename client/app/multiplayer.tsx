@@ -39,6 +39,7 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        setPassword('');
         router.push({ pathname: '/(tabs)', params: { gameMode: 'multiplayer', playerName } });
       } else {
         Alert.alert('Login Failed', data.message || 'Invalid password.');

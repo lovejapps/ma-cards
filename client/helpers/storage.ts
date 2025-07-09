@@ -22,4 +22,13 @@ export const storage = {
       }
     } catch {}
   },
+  async removeItem(key: string) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+      } else {
+        await SecureStore.deleteItemAsync(key);
+      }
+    } catch {}
+  },
 };

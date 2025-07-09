@@ -25,6 +25,7 @@ export default function LobbyScreen() {
   };
 
   const handleCancel = async () => {
+    setRoomId('');
     router.back()
   }
 

@@ -38,6 +38,12 @@ export default function LoginScreen() {
     getPlayerName();
   }, [dispatch]);
 
+  const handleCancel = async () => {
+    dispatch(clearUser());
+    storage.removeItem('user');
+    setPlayerName('');
+  }
+
   const handleSelectMultiplayer = async () => {
     try {
       if (playerName) {
@@ -75,12 +81,18 @@ export default function LoginScreen() {
           onSubmitEditing={handlePlayWithComputer}
         />
       )}
-      <TouchableOpacity style={styles.button} onPress={handlePlayWithComputer} disabled={!apiReady}>
+      <View style={{width: '80%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+      <TouchableOpacity style={[styles.button, {width: '45%'}]} onPress={handlePlayWithComputer} disabled={!apiReady}>
         <Text style={styles.buttonText}>Play with AI</Text>
       </TouchableOpacity>
-      <View style={styles.divider} />
-      <TouchableOpacity style={styles.button} onPress={handleSelectMultiplayer} disabled={!apiReady}>
+      <Text style={styles.buttonText}> Or </Text>
+      <TouchableOpacity style={[styles.button, {width: '45%'}]} onPress={handleSelectMultiplayer} disabled={!apiReady}>
         <Text style={styles.buttonText}>Play Multiplayer</Text>
+      </TouchableOpacity>
+      </View>
+      <View style={styles.divider} />
+      <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+        <Text style={styles.cancelButtonText}>Cancel</Text>
       </TouchableOpacity>
     </View>
   );
@@ -134,6 +146,7 @@ const styles = StyleSheet.create({
     color: 'grey',
     fontSize: 18,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   divider: {
     height: 1,
@@ -141,4 +154,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
     marginVertical: 30,
   },
+  cancelButton: {
+    backgroundColor: "#dc3545",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    width: "80%",
+    marginTop: 20,
+  },
+  cancelButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
 });
