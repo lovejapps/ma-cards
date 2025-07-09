@@ -24,6 +24,10 @@ export default function LobbyScreen() {
     router.push({ pathname: '/game', params: { gameMode: 'multiplayer', action: 'join', playerName, roomId } });
   };
 
+  const handleCancel = async () => {
+    router.back()
+  }
+
   return (
     <View style={styles.container}>
       <View style={{width: 300, height: 150, backgroundColor: 'white', borderRadius: 10, marginBottom: 10}}>
@@ -46,6 +50,7 @@ export default function LobbyScreen() {
       </TouchableOpacity>
 
       <View style={styles.divider} />
+      <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
     </View>
   );
 }
@@ -64,7 +69,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   input: {
-    width: '100%',
+    width: '80%',
     height: 50,
     borderColor: '#ccc',
     borderWidth: 1,
@@ -74,7 +79,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   button: {
-    width: '100%',
+    width: '80%',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center', //glass
@@ -97,5 +102,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
     marginVertical: 30,
   },
+  cancelButton: {
+    backgroundColor: "#dc3545",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    width: "80%",
+    marginTop: 20,
+  },
+  cancelButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
 });
 

@@ -22,6 +22,8 @@ import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
 import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
 import { storage } from '@/helpers/storage';
+import { useAppDispatch } from '@/store/hooks';
+import { clearUser } from '@/store/userSlice';
 
 const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || "https://macards.api.lovejapps.com";
 
@@ -42,6 +44,7 @@ interface GameView {
 export default function GameScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const dispatch = useAppDispatch();
   const { gameMode, playerName, roomId, action } = params;
 
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -82,9 +85,11 @@ export default function GameScreen() {
     await storage.setItem('ma_cards_singleplayer', '');
     router.dismiss(2);
   }
+
   const handleLogoutExit = async () => { 
     await storage.setItem('ma_cards_singleplayer', '');
     await storage.setItem('user', '');
+    dispatch(clearUser());
     setTimeout(() => { router.dismiss(2); }, 300);
   }
 

@@ -2,42 +2,41 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { storage } from '@/helpers/storage';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { setUser, clearUser } from '../store/userSlice';
 
 const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || "https://macards.api.lovejapps.com";
-
-interface User {
-  displayName: string;
-}
 export default function LoginScreen() {
   const [playerName, setPlayerName] = useState('');
-  const [user, setUser] = useState<User | null>(null);
   const [apiReady, setApiReady] = useState(false);
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.user.displayName ? { displayName: state.user.displayName } : null);
 
-    useEffect(() => {
-      const checkHealth = async () => {
-        try {
-          const response = await fetch(`${WEBSOCKET_URL}/api/health`);
-          const data = await response.json();
-          console.log('Server health:', data);
-          setApiReady(true);
-        } catch (error) {
-          console.error('Error checking server health:', error);
-        }
-      };
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch(`${WEBSOCKET_URL}/api/health`);
+        const data = await response.json();
+        console.log('Server health:', data);
+        setApiReady(true);
+      } catch (error) {
+        console.error('Error checking server health:', error);
+      }
+    };
 
-      const getPlayerName = async () => {
-        const user = await storage.getItem('user');
-        if (user) {
-          const parsed = JSON.parse(user);
-          setUser(parsed);
-          setPlayerName(parsed.displayName);
-        }
-      };
-  
-      checkHealth();
-      getPlayerName();
-    }, []);
+    const getPlayerName = async () => {
+      const user = await storage.getItem('user');
+      if (user) {
+        const parsed = JSON.parse(user);
+        dispatch(setUser({ displayName: parsed.displayName }));
+        setPlayerName(parsed.displayName);
+      }
+    };
+
+    checkHealth();
+    getPlayerName();
+  }, [dispatch]);
 
   const handleSelectMultiplayer = async () => {
     try {
@@ -52,16 +51,16 @@ export default function LoginScreen() {
     }
   };
 
-    const handlePlayWithComputer = () => {
-      if (!playerName.trim()) {
-        Alert.alert('Player name is required.', playerName);
-        console.log('Player name is required.');
-        return;
-      }
-      setUser({ displayName: playerName });
-      storage.setItem('user', JSON.stringify({ displayName: playerName }));
-      router.push({ pathname: '/(tabs)/game', params: { gameMode: 'singleplayer', playerName } });
-    };
+  const handlePlayWithComputer = () => {
+    if (!playerName.trim()) {
+      Alert.alert('Player name is required.', playerName);
+      console.log('Player name is required.');
+      return;
+    }
+    dispatch(setUser({ displayName: playerName }));
+    storage.setItem('user', JSON.stringify({ displayName: playerName }));
+    router.push({ pathname: '/(tabs)/game', params: { gameMode: 'singleplayer', playerName } });
+  };
 
   return (
     <View style={styles.container}>
@@ -69,12 +68,12 @@ export default function LoginScreen() {
       <Text style={styles.title}>{user && user.displayName ? `Welcome ${user.displayName}` : 'Enter your name'}</Text>
       {user ? null : (
         <TextInput
-        style={styles.input}
-        placeholder="Name"
-        value={playerName}
-        onChangeText={setPlayerName}
-        onSubmitEditing={handlePlayWithComputer}
-      />
+          style={styles.input}
+          placeholder="Name"
+          value={playerName}
+          onChangeText={setPlayerName}
+          onSubmitEditing={handlePlayWithComputer}
+        />
       )}
       <TouchableOpacity style={styles.button} onPress={handlePlayWithComputer} disabled={!apiReady}>
         <Text style={styles.buttonText}>Play with AI</Text>
@@ -108,7 +107,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   input: {
-    width: '100%',
+    width: '80%',
     height: 50,
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -116,9 +115,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 15,
     marginBottom: 20,
+    padding: 15,
   },
   button: {
-    width: '100%',
+    width: '80%',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center', //glass
