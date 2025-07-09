@@ -1,32 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAppSelector } from '../../store/hooks';
 
 export default function LobbyScreen() {
-  const params = useLocalSearchParams();
-  const { playerName } = params;
-  const [roomId, setRoomId] = useState('');
   const router = useRouter();
-
-  const handleCreateGame = () => {
-    if (!(playerName as string).trim()) {
-      Alert.alert('Player name is required.');
-      return;
-    }
-    router.push({ pathname: '/game', params: { gameMode: 'multiplayer', action: 'create', playerName } });
-  };
-
-  const handleJoinGame = () => {
-    if (!(playerName as string).trim() || !roomId.trim()) {
-      Alert.alert('Player name and Room ID are required.');
-      return;
-    }
-    router.push({ pathname: '/game', params: { gameMode: 'multiplayer', action: 'join', playerName, roomId } });
-  };
+  const playerName = useAppSelector(state => state.user.displayName) || 'Not set';
 
   const handleCancel = async () => {
-    setRoomId('');
-    router.dismiss()
+    router.back()
   }
 
   return (
@@ -34,21 +16,12 @@ export default function LobbyScreen() {
       <View style={{width: 300, height: 150, backgroundColor: 'white', borderRadius: 10, marginBottom: 10}}>
       <Image source={require('../../assets/images/logo.jpg')} style={{ width: 300, height: 120, borderRadius: 10 }} />
       </View>
-      <TouchableOpacity style={styles.button} onPress={handleCreateGame}>
-        <Text style={styles.buttonText}>Create Game</Text>
-      </TouchableOpacity>
-
-      <View style={styles.divider} />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Enter Room ID to join"
-        value={roomId}
-        onChangeText={setRoomId}
-      />
-      <TouchableOpacity style={styles.button} onPress={handleJoinGame}>
-        <Text style={styles.buttonText}>Join Game</Text>
-      </TouchableOpacity>
+      <Text style={styles.title}>Profile</Text>
+      <View>
+        <Text style={styles.buttonText}>
+          Player Name: {playerName}
+        </Text>
+      </View>
 
       <View style={styles.divider} />
       <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>

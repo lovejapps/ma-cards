@@ -50,6 +50,10 @@ export default function LoginScreen() {
     }
   };
 
+  const handleCancel = async () => {
+    router.back()
+  }
+
   return (
     <View style={styles.container}>
       <Image source={require('../assets/images/macards.png')} style={styles.logo} />
@@ -64,6 +68,9 @@ export default function LoginScreen() {
       />
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={!apiReady}>
         <Text style={styles.buttonText}>Enter</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+        <Text style={styles.cancelButtonText}>Cancel</Text>
       </TouchableOpacity>
     </View>
   );
@@ -90,7 +97,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   input: {
-    width: '100%',
+    width: '80%',
     height: 50,
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -100,7 +107,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   button: {
-    width: '100%',
+    width: '80%',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center', //glass
@@ -123,4 +130,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
     marginVertical: 30,
   },
+  cancelButton: {
+    backgroundColor: "#dc3545",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    width: "80%",
+    marginTop: 20,
+  },
+  cancelButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
 });

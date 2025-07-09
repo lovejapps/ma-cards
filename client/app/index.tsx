@@ -44,9 +44,19 @@ export default function LoginScreen() {
     setPlayerName('');
   }
 
+  const setPlayerNameAndStore = (playerName: string) => {
+    if (!playerName.trim()) {
+      Alert.alert('Player name is required.', playerName);
+      console.log('Player name is required.');
+      return;
+    }
+    dispatch(setUser({ displayName: playerName }));
+    storage.setItem('user', JSON.stringify({ displayName: playerName }));
+  }
   const handleSelectMultiplayer = async () => {
     try {
       if (playerName) {
+        setPlayerNameAndStore(playerName);
         router.push({ pathname: '/multiplayer', params: { gameMode: 'multiplayer', playerName } });
       } else {
         Alert.alert('Login Failed', 'Player name is required.');
@@ -58,14 +68,17 @@ export default function LoginScreen() {
   };
 
   const handlePlayWithComputer = () => {
-    if (!playerName.trim()) {
-      Alert.alert('Player name is required.', playerName);
-      console.log('Player name is required.');
-      return;
+    try {
+      if (playerName) {
+        setPlayerNameAndStore(playerName);
+        router.push({ pathname: '/(tabs)/game', params: { gameMode: 'singleplayer', playerName } });
+      } else {
+        Alert.alert('Login Failed', 'Player name is required.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'An error occurred while trying to select singleplayer mode.');
     }
-    dispatch(setUser({ displayName: playerName }));
-    storage.setItem('user', JSON.stringify({ displayName: playerName }));
-    router.push({ pathname: '/(tabs)/game', params: { gameMode: 'singleplayer', playerName } });
   };
 
   return (
