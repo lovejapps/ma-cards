@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { storage } from '@/helpers/storage';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setUser, clearUser } from '../store/userSlice';
+import { resetGameState } from '@/store/gameSlice';
 
 const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || "https://macards.api.lovejapps.com";
 export default function LoginScreen() {
@@ -68,6 +69,8 @@ export default function LoginScreen() {
   };
 
   const handlePlayWithComputer = () => {
+    dispatch(resetGameState());
+    storage.removeItem('ma_cards_singleplayer');
     try {
       if (playerName) {
         setPlayerNameAndStore(playerName);

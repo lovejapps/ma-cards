@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { resetGameState } from '@/store/gameSlice';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { storage } from '@/helpers/storage';
 
 export default function LobbyScreen() {
-  const params = useLocalSearchParams();
-  const { playerName } = params;
+  // const params = useLocalSearchParams();
+  const dispatch = useAppDispatch();
+  // const { playerName } = params;
+  const playerName = useAppSelector((state) => state.user.displayName);
   const [roomId, setRoomId] = useState('');
   const router = useRouter();
 
   const handleCreateGame = () => {
+    dispatch(resetGameState());
+    storage.removeItem('ma_cards_multiplayer');
     if (!(playerName as string).trim()) {
       Alert.alert('Player name is required.');
       return;
@@ -17,6 +24,8 @@ export default function LobbyScreen() {
   };
 
   const handleJoinGame = () => {
+    dispatch(resetGameState());
+    storage.removeItem('ma_cards_multiplayer');
     if (!(playerName as string).trim() || !roomId.trim()) {
       Alert.alert('Player name and Room ID are required.');
       return;

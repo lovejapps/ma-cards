@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 
 import {
   ActivityIndicator,
@@ -22,13 +22,17 @@ import { GameState as ServerGameState, Card as CardType, Suit } from '@/types';
 import { GameState as LocalGameState } from '@/logic/gameState';
 import { Card } from '../../logic/card';
 import { storage } from '@/helpers/storage';
-import { useAppDispatch } from '@/store/hooks';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  setSocket, setLocalGame, setGame, setLobbyPlayers,
+  setMyId, setHostId, setStatus, setSuitChoice
+} from '@/store/gameSlice';
 import { clearUser } from '@/store/userSlice';
 
 const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL || "https://macards.api.lovejapps.com";
 
 // Unified game state type for rendering
-interface GameView {
+export interface GameView {
   myHand: CardType[];
   opponents: { id: string; name: string; handSize: number }[];
   topCard: CardType | null;
@@ -47,14 +51,17 @@ export default function GameScreen() {
   const dispatch = useAppDispatch();
   const { gameMode, playerName, roomId, action } = params;
 
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [localGame, setLocalGame] = useState<LocalGameState | null>(null);
-  const [game, setGame] = useState<GameView | null>(null);
-  const [lobbyPlayers, setLobbyPlayers] = useState<{ [id: string]: string }>({});
-  const [myId, setMyId] = useState<string | null>(null);
-  const [hostId, setHostId] = useState<string | null>(null);
-  const [status, setStatus] = useState(gameMode === 'singleplayer' ? 'playing' : 'connecting');
-  const [suitChoice, setSuitChoice] = useState<{ show: boolean, card: CardType | null }>({ show: false, card: null });
+  // Redux selectors for game state
+  const socket = useAppSelector((state) => state.game.socket);
+  const localGame = useAppSelector((state) => state.game.localGame);
+  const game = useAppSelector((state) => state.game.game);
+  const lobbyPlayers = useAppSelector((state) => state.game.lobbyPlayers);
+  const myId = useAppSelector((state) => state.game.myId);
+  const hostId = useAppSelector((state) => state.game.hostId);
+  const status = useAppSelector((state) => state.game.status);
+  const suitChoice = useAppSelector((state) => state.game.suitChoice);
+
+
 
   const showAlert = (title: string, message: string, buttons?: any[]) => {
     if (Platform.OS === 'web') {
@@ -70,13 +77,13 @@ export default function GameScreen() {
     if (gameMode === 'singleplayer') {
       await storage.setItem('ma_cards_singleplayer', '');
       const newLocalGame = new LocalGameState([playerName as string]);
-      setLocalGame(newLocalGame);
+      dispatch(setLocalGame(newLocalGame));
       updateGameStateView(newLocalGame, 'player1');
     } else if (gameMode === 'multiplayer') {
       if (socket && roomId) {
         socket.emit('resetGame', { roomId });
         // Optionally clear local game state view
-        setGame(null);
+        dispatch(setGame(null));
       }
     }
   }
@@ -101,12 +108,12 @@ export default function GameScreen() {
   const updateGameStateView = useCallback((state: LocalGameState | ServerGameState, localPlayerId?: string) => {
     if (state instanceof LocalGameState) {
       const localState = state.getStateForPlayer(localPlayerId || 'player1');
-      if(localState) setGame(localState as GameView);
+      if(localState) dispatch(setGame(localState as GameView));
     } else {
       // This is a hack to make the server state conform to the GameView
       const serverState = state as any;
       serverState.winner = serverState.winnerName;
-      setGame(serverState as GameView);
+      dispatch(setGame(serverState as GameView));
       // Save game view for multiplayer persistence
       if (roomId) {
         storage.setItem(`ma_cards_multiplayer_${roomId}`, JSON.stringify(serverState));
@@ -123,16 +130,19 @@ export default function GameScreen() {
           try {
             const parsed = JSON.parse(saved);
             const restoredGame = LocalGameState.fromJSON(parsed);
-            setLocalGame(restoredGame);
+            dispatch(setLocalGame(restoredGame));
             updateGameStateView(restoredGame, 'player1');
+            dispatch(setStatus('playing'));
             return;
           } catch {
             // fallback to new game
           }
         }
         const newLocalGame = new LocalGameState([playerName as string]);
-        setLocalGame(newLocalGame);
+        console.log({newLocalGame, called: "called"});
+        dispatch(setLocalGame(newLocalGame));
         updateGameStateView(newLocalGame, 'player1');
+        dispatch(setStatus('playing'));
       })();
     }
   }, [gameMode, playerName, updateGameStateView]);
@@ -146,7 +156,7 @@ export default function GameScreen() {
         const saved = await storage.getItem(`ma_cards_multiplayer_${roomId}`);
         if (saved) {
           try {
-            setGame(JSON.parse(saved));
+            dispatch(setGame(JSON.parse(saved)));
           } catch {}
         }
       }
@@ -157,31 +167,32 @@ export default function GameScreen() {
   useEffect(() => {
     if (gameMode !== 'multiplayer') return;
 
+    console.log({playerName, roomId})
     const newSocket = io(WEBSOCKET_URL);
-    setSocket(newSocket);
+    dispatch(setSocket(newSocket));
 
     newSocket.on('connect', () => {
-      setStatus('waiting');
-      setMyId(newSocket.id || null);
+      dispatch(setStatus('waiting'));
+      dispatch(setMyId(newSocket.id || null));
     });
 
     newSocket.on('roomCreated', ({ roomId, playerId, playerName }) => {
       router.setParams({ roomId });
-      setHostId(playerId);
-      setLobbyPlayers({ [playerId]: playerName });
+      dispatch(setHostId(playerId));
+      dispatch(setLobbyPlayers({ [playerId]: playerName }));
     });
 
     newSocket.on('playerJoined', ({ players, hostId }) => {
-      setLobbyPlayers(players);
-      setHostId(hostId);
+      dispatch(setLobbyPlayers(players));
+      dispatch(setHostId(hostId));
     });
 
-    newSocket.on('gameStart', () => setStatus('playing'));
+    newSocket.on('gameStart', () => dispatch(setStatus('playing')));
     newSocket.on('gameState', (gs: ServerGameState) => updateGameStateView(gs));
     newSocket.on('invalidMove', ({ message }) => showAlert('Invalid Move', message));
     newSocket.on('gameError', ({ message }) => showAlert('Error', message, [{ text: 'OK', onPress: () => router.back() }]));
     newSocket.on('opponentDisconnected', (message) => showAlert('Opponent Left', message, [{ text: 'OK', onPress: () => router.back() }]));
-    newSocket.on('disconnect', () => setStatus('connecting'));
+    newSocket.on('disconnect', () => dispatch(setStatus('connecting')));
 
     // Cleanup function
     return () => {
@@ -198,6 +209,7 @@ export default function GameScreen() {
         socket.emit('createRoom', { playerName });
       } else if (action === 'join' && pRoomId) {
         socket.emit('joinRoom', { playerName, roomId: pRoomId });
+        dispatch(setStatus('waiting'));
       }
     }
   }, [gameMode, socket, myId, action, roomId, playerName]);
@@ -221,7 +233,7 @@ export default function GameScreen() {
 
   const handlePlayCard = (card: CardType) => {
     if (card.rank === '8') {
-      setSuitChoice({ show: true, card });
+      dispatch(setSuitChoice({ show: true, card }));
     } else {
       if (gameMode === 'singleplayer' && localGame) {
         const result = localGame.playCard('player1', new Card(card.suit, card.rank));
@@ -244,7 +256,7 @@ export default function GameScreen() {
       } else {
         socket?.emit('playCard', { roomId, card: suitChoice.card, chosenSuit: suit });
       }
-      setSuitChoice({ show: false, card: null });
+      dispatch(setSuitChoice({ show: false, card: null }));
       // Save after suit choice
       if (gameMode === 'singleplayer' && localGame) {
         storage.setItem('ma_cards_singleplayer', JSON.stringify(localGame.toJSON()));
@@ -322,7 +334,7 @@ export default function GameScreen() {
 
   return (
     <View style={styles.container}>
-      <Modal transparent visible={suitChoice.show} onRequestClose={() => setSuitChoice({ show: false, card: null })}>
+      <Modal transparent visible={suitChoice.show} onRequestClose={() => dispatch(setSuitChoice({ show: false, card: null }))}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text>Choose a suit</Text>
@@ -489,7 +501,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
   },
   gameArea: { width: "100%" },
-  opponentInfo: { padding: 10, alignItems: "center", marginTop: 100, zIndex: -1 },
+  opponentInfo: { padding: 10, alignItems: "center", marginTop: 100, zIndex: 0 },
   deckArea: {
     flexDirection: "row",
     justifyContent: "space-around",
